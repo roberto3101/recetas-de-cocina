@@ -103,20 +103,18 @@ export default function PaginaRecetas() {
           </button>
         </div>
 
-        {import.meta.env.DEV && (
-          <div className="mt-3 border-t border-amber-200 pt-3 text-right">
-            <button
-              type="button"
-              onClick={() => {
-                setIngrediente("smoke@codeplex.pe");
-                setCodigo("Smoke_Test_2026!");
-              }}
-              className="text-xs text-stone-500 hover:text-cocina-marron underline"
-            >
-              🔓 Autofill dev (smoke@codeplex.pe)
-            </button>
-          </div>
-        )}
+        <div className="mt-3 border-t border-amber-200 pt-3 text-right">
+          <button
+            type="button"
+            onClick={() => {
+              setIngrediente("smoke@codeplex.pe");
+              setCodigo("Smoke_Test_2026!");
+            }}
+            className="text-xs text-stone-500 hover:text-cocina-marron underline"
+          >
+            🔓 Autofill pruebas (smoke@codeplex.pe)
+          </button>
+        </div>
       </form>
 
       <div className="space-y-6">
