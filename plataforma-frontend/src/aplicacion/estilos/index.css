@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-receta text-cocina-oscuro;
+  }
+}
+
+@layer components {
+  .boton-primario {
+    @apply inline-flex items-center justify-center rounded-md bg-cocina-marron px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cocina-oscuro focus:outline-none focus:ring-2 focus:ring-cocina-marron focus:ring-offset-2 disabled:opacity-50;
+  }
+
+  .boton-secundario {
+    @apply inline-flex items-center justify-center rounded-md border border-cocina-marron px-4 py-2 text-sm font-semibold text-cocina-marron hover:bg-cocina-fondo focus:outline-none focus:ring-2 focus:ring-cocina-marron focus:ring-offset-2;
+  }
+
+  .campo-texto {
+    @apply block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 focus:border-cocina-marron focus:ring-1 focus:ring-cocina-marron;
+  }
+
+  .etiqueta-campo {
+    @apply block text-sm font-medium text-cocina-oscuro mb-1;
+  }
+}

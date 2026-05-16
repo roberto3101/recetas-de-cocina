@@ -1,0 +1,41 @@
+# Datos locales de CockroachDB
+database/cockroach-data/
+
+# Variables de entorno (cada operador tiene su propio .env)
+plataforma-backend/.env
+plataforma-frontend/.env
+.env
+.env.local
+
+# Binarios compilados
+plataforma-backend/plataforma-backend
+plataforma-backend/plataforma-backend.exe
+plataforma-backend/bin/
+
+# Logs
+*.log
+logs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (futuro frontend)
+node_modules/
+dist/
+.cache/
+plataforma-frontend/test-results/
+plataforma-frontend/playwright-report/
+plataforma-frontend/coverage/
+
+# Go
+*.test
+*.out
+*.exe
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db

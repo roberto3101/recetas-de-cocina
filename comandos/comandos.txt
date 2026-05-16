@@ -1,0 +1,8 @@
+FRONTEND:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npm run dev
+
+BACKEND:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go run .
+
+COCKROACH:
+C:\cockroachdb\cockroach.exe start-single-node --insecure --listen-addr=localhost:26258 --http-addr=localhost:8090 --store=C:\Users\user\Desktop\sistemas-unificados\database\cockroach-data
