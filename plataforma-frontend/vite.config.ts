@@ -2,6 +2,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
+import { webcrypto } from "crypto";
+
+// Node 18 no expone crypto como global; vite-plugin-pwa lo necesita en build
+if (!(globalThis as unknown as { crypto?: Crypto }).crypto) {
+  (globalThis as unknown as { crypto: Crypto }).crypto = webcrypto as unknown as Crypto;
+}
 
 export default defineConfig({
   plugins: [
