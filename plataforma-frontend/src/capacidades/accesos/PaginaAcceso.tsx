@@ -37,6 +37,7 @@ export default function PaginaAcceso() {
   const [mensajeFlash, setMensajeFlash] = useState<string | null>(null);
 
   const [accesoEditando, setAccesoEditando] = useState<AccesoGuardado | null>(null);
+  const [accesoViendo, setAccesoViendo] = useState<AccesoGuardado | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -202,6 +203,14 @@ export default function PaginaAcceso() {
           alExito={() => { setAccesoEditando(null); void cargar(); }}
         />
       )}
+      {accesoViendo && (
+        <ModalVerDetalles
+          acceso={accesoViendo}
+          sistema={sistemasPorId.get(accesoViendo.sistema_destino_id)}
+          alCerrar={() => setAccesoViendo(null)}
+          alCopiar={copiar}
+        />
+      )}
 
       {/* Vista mobile: cards apilados */}
       <div className="md:hidden space-y-3">
@@ -266,6 +275,7 @@ export default function PaginaAcceso() {
                 >{a.observaciones}</div>
               )}
               <div className="flex justify-end gap-4 pt-1 border-t border-stone-100">
+                <button onClick={() => setAccesoViendo(a)} className="text-xs text-cocina-marron">Detalles</button>
                 <button onClick={() => setAccesoEditando(a)} className="text-xs text-cocina-marron">Editar</button>
                 {inactivo
                   ? <button onClick={() => void reactivar(a)} className="text-xs text-emerald-700">Reactivar</button>
@@ -355,6 +365,7 @@ export default function PaginaAcceso() {
                   </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <div className="flex flex-wrap justify-end items-center gap-x-3 gap-y-1">
+                      <button onClick={() => setAccesoViendo(a)} className="text-xs text-cocina-marron hover:underline">Detalles</button>
                       <button onClick={() => setAccesoEditando(a)} className="text-xs text-cocina-marron hover:underline">Editar</button>
                       {inactivo
                         ? <button onClick={() => void reactivar(a)} className="text-xs text-emerald-700 hover:underline">Reactivar</button>
@@ -382,6 +393,73 @@ function ModalContenedor({ titulo, alCerrar, children }: { titulo: string; alCer
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
+    </div>
+  );
+}
+
+function ModalVerDetalles({ acceso, sistema, alCerrar, alCopiar }: {
+  acceso: AccesoGuardado;
+  sistema?: SistemaDisponible;
+  alCerrar: () => void;
+  alCopiar: (valor: string, etiqueta: string) => Promise<void>;
+}) {
+  const [credencial, setCredencial] = useState<CredencialAutofill | null>(null);
+  const [pwdVisible, setPwdVisible] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await pedirJson<CredencialAutofill>(`/cocina/boveda/accesos/${acceso.id}/bookmarklet`);
+        setCredencial(r);
+      } catch (e) {
+        if (e instanceof Error) setError(e.message);
+      } finally {
+        setCargando(false);
+      }
+    })();
+  }, [acceso.id]);
+
+  return (
+    <ModalContenedor titulo="Detalles del acceso" alCerrar={alCerrar}>
+      <dl className="space-y-3 text-sm">
+        <Fila etiqueta="Título" valor={acceso.titulo || "—"} />
+        <Fila etiqueta="Sistema" valor={sistema?.nombre || "—"} />
+        <Fila etiqueta="URL" valor={sistema?.url_acceso || "—"} alCopiar={sistema?.url_acceso ? () => void alCopiar(sistema.url_acceso, "URL") : undefined} />
+        <Fila etiqueta="Usuario" valor={acceso.usuario_externo} alCopiar={() => void alCopiar(acceso.usuario_externo, "Usuario")} />
+        <div className="grid grid-cols-[90px_1fr_auto_auto] gap-2 items-start">
+          <dt className="font-medium text-stone-500 text-xs uppercase tracking-wider pt-1">Clave</dt>
+          <dd className="text-cocina-oscuro font-mono text-xs break-all">
+            {cargando ? "Cargando…" : error ? <span className="text-red-700">{error}</span> :
+              pwdVisible ? credencial?.password : "•".repeat(Math.min(20, credencial?.password.length ?? 8))}
+          </dd>
+          <button type="button" onClick={() => setPwdVisible(!pwdVisible)} className="text-stone-500 hover:text-cocina-marron" title={pwdVisible ? "Ocultar" : "Ver"}>{pwdVisible ? "🙈" : "👁️"}</button>
+          <button type="button" onClick={() => credencial && void alCopiar(credencial.password, "Clave")} className="text-stone-500 hover:text-cocina-marron" title="Copiar">📋</button>
+        </div>
+        <Fila etiqueta="Tipo" valor={acceso.tipo || "WEB"} />
+        {acceso.puerto != null && <Fila etiqueta="Puerto" valor={String(acceso.puerto)} />}
+        <Fila etiqueta="Estado" valor={acceso.estado} />
+        {acceso.observaciones && (
+          <div className="grid grid-cols-[90px_1fr] gap-2 items-start">
+            <dt className="font-medium text-stone-500 text-xs uppercase tracking-wider pt-1">Notas</dt>
+            <dd className="text-cocina-oscuro text-xs whitespace-pre-wrap break-words">{acceso.observaciones}</dd>
+          </div>
+        )}
+      </dl>
+      <div className="mt-5 flex justify-end">
+        <button type="button" onClick={alCerrar} className="boton-secundario">Cerrar</button>
+      </div>
+    </ModalContenedor>
+  );
+}
+
+function Fila({ etiqueta, valor, alCopiar }: { etiqueta: string; valor: string; alCopiar?: () => void }) {
+  return (
+    <div className="grid grid-cols-[90px_1fr_auto] gap-2 items-start">
+      <dt className="font-medium text-stone-500 text-xs uppercase tracking-wider pt-1">{etiqueta}</dt>
+      <dd className="text-cocina-oscuro text-xs break-words">{valor}</dd>
+      {alCopiar && <button onClick={alCopiar} className="text-stone-500 hover:text-cocina-marron" title="Copiar">📋</button>}
     </div>
   );
 }
