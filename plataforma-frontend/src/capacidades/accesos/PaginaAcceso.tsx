@@ -200,7 +200,77 @@ export default function PaginaAcceso() {
         />
       )}
 
-      <div className="overflow-x-auto rounded-md border border-stone-200">
+      {/* Vista mobile: cards apilados */}
+      <div className="md:hidden space-y-3">
+        {cargando && <div className="text-center text-stone-500 py-6">Cargando…</div>}
+        {!cargando && accesosFiltrados.length === 0 && (
+          <div className="text-center text-stone-500 py-6 border border-stone-200 rounded-md">
+            No hay accesos. Toca <strong>+ Registrar acceso</strong>.
+          </div>
+        )}
+        {!cargando && accesosFiltrados.map((a) => {
+          const s = sistemasPorId.get(a.sistema_destino_id);
+          const inactivo = a.estado === "REVOCADO";
+          const pwdVisible = !!pwdsVisibles[a.id];
+          const pwd = pwdsCache[a.id];
+          return (
+            <div key={a.id} className={`rounded-md border border-stone-200 bg-white p-3 space-y-2 ${inactivo ? "opacity-60" : ""}`}>
+              <div>
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void abrirEnPestana(a)}
+                    className="font-medium text-cocina-marron hover:underline text-left flex-1"
+                    disabled={inactivo}
+                  >
+                    {a.titulo || s?.nombre || "(sin título)"} ↗
+                  </button>
+                  {inactivo && <span className="text-[10px] bg-stone-300 text-stone-700 px-2 py-0.5 rounded shrink-0">inactivo</span>}
+                </div>
+                <div className="text-xs text-stone-400 break-all mt-0.5">{s?.url_acceso ?? "—"}</div>
+              </div>
+              <div className="grid grid-cols-[60px_1fr] gap-2 text-sm">
+                <span className="text-stone-500 text-xs">Usuario</span>
+                <button
+                  type="button"
+                  onClick={() => void copiar(a.usuario_externo, "Usuario")}
+                  className="text-left break-all hover:bg-stone-100 rounded px-1 py-0.5"
+                  title="Tocar para copiar"
+                >
+                  {a.usuario_externo}
+                </button>
+                <span className="text-stone-500 text-xs">Clave</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void copiarPwd(a)}
+                    className="font-mono text-xs hover:bg-stone-100 rounded px-1 py-0.5 flex-1 text-left break-all"
+                    title="Tocar para copiar"
+                  >
+                    {pwdVisible && pwd ? pwd : "••••••••"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void togglePwdVisible(a)}
+                    className="text-stone-500 shrink-0"
+                  >{pwdVisible ? "🙈" : "👁️"}</button>
+                </div>
+              </div>
+              {a.observaciones && <div className="text-xs text-stone-400">{a.observaciones}</div>}
+              <div className="flex justify-end gap-4 pt-1 border-t border-stone-100">
+                <button onClick={() => setAccesoEditando(a)} className="text-xs text-cocina-marron">Editar</button>
+                {inactivo
+                  ? <button onClick={() => void reactivar(a)} className="text-xs text-emerald-700">Reactivar</button>
+                  : <button onClick={() => void desactivar(a)} className="text-xs text-red-700">Desactivar</button>
+                }
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Vista desktop: tabla */}
+      <div className="hidden md:block overflow-x-auto rounded-md border border-stone-200">
         <table className="min-w-full text-sm">
           <thead className="bg-stone-100 text-left text-xs uppercase tracking-wider text-stone-600">
             <tr>

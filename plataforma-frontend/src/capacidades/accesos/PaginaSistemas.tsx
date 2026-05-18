@@ -141,7 +141,27 @@ export default function PaginaSistemas() {
         </form>
       )}
 
-      <div className="overflow-x-auto rounded-md border border-stone-200">
+      {/* Mobile: cards */}
+      <div className="md:hidden space-y-3">
+        {cargando && <div className="text-center text-stone-500 py-6">Cargando…</div>}
+        {!cargando && sistemas.length === 0 && (
+          <div className="text-center text-stone-500 py-6 border border-stone-200 rounded-md">
+            Sin sistemas. Toca <strong>+ Nuevo sistema</strong>.
+          </div>
+        )}
+        {!cargando && sistemas.map((s) => (
+          <div key={s.id} className="rounded-md border border-stone-200 bg-white p-3 space-y-1">
+            <div className="font-medium text-cocina-oscuro">{s.nombre}</div>
+            <div className="text-cocina-marron break-all text-xs">{s.url_acceso}</div>
+            <div className="flex justify-end pt-1 border-t border-stone-100">
+              <button onClick={() => eliminar(s)} className="text-xs text-red-700">Eliminar</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: tabla */}
+      <div className="hidden md:block overflow-x-auto rounded-md border border-stone-200">
         <table className="min-w-full text-sm">
           <thead className="bg-stone-100 text-left text-xs uppercase tracking-wider text-stone-600">
             <tr>
