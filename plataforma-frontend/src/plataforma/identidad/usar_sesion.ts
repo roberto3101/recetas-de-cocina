@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode, createElement } from "react";
 import { ErrorApi, enviarJson, pedirJson } from "@/plataforma/red/cliente_api";
 
 export type Perfil = {
@@ -8,7 +8,20 @@ export type Perfil = {
   expira_en: string;
 };
 
-export function usarSesion() {
+type EstadoSesion = {
+  perfil: Perfil | null;
+  cargando: boolean;
+  error: string | null;
+  recargar: () => Promise<void>;
+  cerrarSesion: () => Promise<void>;
+};
+
+const ContextoSesion = createContext<EstadoSesion | null>(null);
+
+// ProveedorSesion: hace UN solo fetch al perfil y lo comparte con todos los componentes.
+// Reemplaza el patrón anterior donde cada componente llamaba usarSesion() y hacía su propio
+// /cocina/identidad/perfil. Ahora hay un único fetch global por sesión.
+export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,5 +56,16 @@ export function usarSesion() {
     }
   }, []);
 
-  return { perfil, cargando, error, recargar, cerrarSesion };
+  const valor: EstadoSesion = { perfil, cargando, error, recargar, cerrarSesion };
+  return createElement(ContextoSesion.Provider, { value: valor }, children);
+}
+
+// usarSesion: hook que consume el contexto. NO hace fetch propio.
+// Si no hay Provider arriba en el árbol, lanza error (uso incorrecto).
+export function usarSesion(): EstadoSesion {
+  const ctx = useContext(ContextoSesion);
+  if (!ctx) {
+    throw new Error("usarSesion debe usarse dentro de <ProveedorSesion>");
+  }
+  return ctx;
 }

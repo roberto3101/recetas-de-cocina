@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	registroEventos := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	registroEventos := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: nivelLogDesdeEntorno()}))
 	slog.SetDefault(registroEventos)
 
 	if err := godotenv.Load(); err != nil {
@@ -64,4 +64,19 @@ func obtenerDireccionEscucha() string {
 		return ":8080"
 	}
 	return direccion
+}
+
+// nivelLogDesdeEntorno lee NIVEL_LOG del .env: DEBUG | INFO | WARN | ERROR.
+// Default INFO. En producción recomendamos WARN para reducir ruido.
+func nivelLogDesdeEntorno() slog.Level {
+	switch os.Getenv("NIVEL_LOG") {
+	case "DEBUG":
+		return slog.LevelDebug
+	case "WARN":
+		return slog.LevelWarn
+	case "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
