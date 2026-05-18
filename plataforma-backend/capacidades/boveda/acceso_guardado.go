@@ -109,6 +109,41 @@ func ListarAccesosActivos(contexto context.Context, ejecutor cockroach.EjecutorS
 	return resultado, filas.Err()
 }
 
+func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, a *AccesoGuardado, actualizadoPor uuid.UUID) error {
+	if strings.TrimSpace(a.UsuarioExterno) == "" {
+		return ErrUsuarioRequerido
+	}
+	if a.SistemaDestinoId == uuid.Nil {
+		return ErrSistemaRequerido
+	}
+	tag, err := ejecutor.Exec(contexto, `
+		UPDATE acceso_guardado
+		SET titulo = $2,
+		    sistema_destino_id = $3,
+		    usuario_externo = $4,
+		    password_cifrada = CASE WHEN $5::BYTES IS NULL THEN password_cifrada ELSE $5 END,
+		    observaciones = $6,
+		    actualizado_en = now(),
+		    actualizado_por = $7
+		WHERE id = $1 AND estado = 'ACTIVO'
+	`,
+		a.Id,
+		strings.TrimSpace(a.Titulo),
+		a.SistemaDestinoId,
+		strings.TrimSpace(a.UsuarioExterno),
+		nullableBytes(a.PasswordCifrada),
+		nullableTexto(a.Observaciones),
+		actualizadoPor,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrAccesoNoEncontrado
+	}
+	return nil
+}
+
 func EliminarAccesoLogico(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID, eliminadoPor uuid.UUID) error {
 	tag, err := ejecutor.Exec(contexto, `
 		UPDATE acceso_guardado
@@ -128,6 +163,13 @@ func EliminarAccesoLogico(contexto context.Context, ejecutor cockroach.EjecutorS
 
 func nullableTexto(valor string) any {
 	if valor == "" {
+		return nil
+	}
+	return valor
+}
+
+func nullableBytes(valor []byte) any {
+	if len(valor) == 0 {
 		return nil
 	}
 	return valor
