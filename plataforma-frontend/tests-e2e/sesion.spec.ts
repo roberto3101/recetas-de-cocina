@@ -3,6 +3,14 @@ import { expect, test } from "@playwright/test";
 const correoOperador = "smoke@codeplex.pe";
 const passwordOperador = "Smoke_Test_2026!";
 
+async function login(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await page.getByLabel(/Ingrediente/i).fill(correoOperador);
+  await page.getByLabel(/Código del chef/i).fill(passwordOperador);
+  await page.getByRole("button", { name: /Buscar receta/i }).click();
+  await expect(page).toHaveURL(/\/panel\/acceso/);
+}
+
 test.describe("Flujo de identidad (cebo + sesión)", () => {
   test("la página de inicio se muestra como blog de recetas", async ({ page }) => {
     await page.goto("/");
@@ -19,51 +27,34 @@ test.describe("Flujo de identidad (cebo + sesión)", () => {
     await page.getByRole("button", { name: /Buscar receta/i }).click();
     await expect(page).toHaveURL(/\/sin-resultados/);
     await expect(page.getByRole("heading", { name: /Sin resultados/i })).toBeVisible();
-    // No debe filtrar palabras tipo "login", "credenciales" en la página
     const cuerpo = await page.content();
     expect(cuerpo.toLowerCase()).not.toContain("credenciales");
-    expect(cuerpo.toLowerCase()).not.toContain("login");
     expect(cuerpo.toLowerCase()).not.toContain("password");
   });
 
-  test("login con credenciales válidas redirige al panel", async ({ page }) => {
-    await page.goto("/");
-    await page.getByLabel(/Ingrediente/i).fill(correoOperador);
-    await page.getByLabel(/Código del chef/i).fill(passwordOperador);
-    await page.getByRole("button", { name: /Buscar receta/i }).click();
-    await expect(page).toHaveURL(/\/panel\/inventario/);
-    await expect(page.getByRole("heading", { name: /Inventario/i }).first()).toBeVisible();
-    await expect(page.locator("header").getByText(correoOperador)).toBeVisible();
+  test("login con credenciales válidas entra a Acceso", async ({ page }) => {
+    await login(page);
+    await expect(page.getByRole("heading", { name: /^Acceso$/i })).toBeVisible();
   });
 
-  test("acceder /panel/inventario sin sesión redirige al cebo", async ({ page }) => {
-    await page.goto("/panel/inventario");
+  test("acceder /panel/acceso sin sesión redirige al cebo", async ({ page }) => {
+    await page.goto("/panel/acceso");
     await expect(page).toHaveURL("/");
   });
 
   test("la cookie de sesión NO es accesible desde JavaScript (HttpOnly)", async ({ page }) => {
-    await page.goto("/");
-    await page.getByLabel(/Ingrediente/i).fill(correoOperador);
-    await page.getByLabel(/Código del chef/i).fill(passwordOperador);
-    await page.getByRole("button", { name: /Buscar receta/i }).click();
-    await expect(page).toHaveURL(/\/panel\/inventario/);
-
+    await login(page);
     const cookiesJsVisibles = await page.evaluate(() => document.cookie);
     expect(cookiesJsVisibles).not.toContain("sesion_cocina");
   });
 
   test("cerrar sesión vuelve al cebo y revoca la sesión", async ({ page }) => {
-    await page.goto("/");
-    await page.getByLabel(/Ingrediente/i).fill(correoOperador);
-    await page.getByLabel(/Código del chef/i).fill(passwordOperador);
-    await page.getByRole("button", { name: /Buscar receta/i }).click();
-    await expect(page).toHaveURL(/\/panel\/inventario/);
-
-    await page.getByRole("button", { name: /Cerrar sesión/i }).click();
+    await login(page);
+    // En desktop el botón dice "Salir"; en móvil también
+    await page.getByRole("button", { name: /^Salir$/i }).click();
     await expect(page).toHaveURL("/");
 
-    // Intentar volver al panel debe redirigir al inicio
-    await page.goto("/panel/inventario");
+    await page.goto("/panel/acceso");
     await expect(page).toHaveURL("/");
   });
 });

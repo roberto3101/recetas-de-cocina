@@ -102,6 +102,8 @@ func limpiarUsuario(conexion *cockroach.ConexionBaseDatos) {
 	contexto := context.Background()
 	for _, sql := range []string{
 		`DELETE FROM auditoria_accion WHERE usuario_id IN (SELECT id FROM usuario WHERE lower(correo_electronico) = lower($1))`,
+		`DELETE FROM acceso_guardado WHERE creado_por IN (SELECT id FROM usuario WHERE lower(correo_electronico) = lower($1))`,
+		`DELETE FROM sistema_destino WHERE creado_por IN (SELECT id FROM usuario WHERE lower(correo_electronico) = lower($1))`,
 		`DELETE FROM sesion_global WHERE usuario_id IN (SELECT id FROM usuario WHERE lower(correo_electronico) = lower($1))`,
 		`DELETE FROM usuario_totp WHERE usuario_id IN (SELECT id FROM usuario WHERE lower(correo_electronico) = lower($1))`,
 		`DELETE FROM usuario WHERE lower(correo_electronico) = lower($1)`,
@@ -466,11 +468,14 @@ func TestSeguridad_AuditoriaRegistraOperaciones(t *testing.T) {
 	entorno := montarEntornoPruebas(t)
 	iniciarSesionComoOperador(t, entorno)
 
-	if estado, _ := putJson(t, entorno, "/cocina/identidad/cambiar-password", map[string]any{
-		"password_actual": passwordSeguridad,
-		"password_nueva":  "AuditableNueva_2026!",
-	}); estado != http.StatusOK {
-		t.Fatalf("cambiar-password: %d", estado)
+	// Acción auditable que NO invalida la sesión: registrar un sistema.
+	cuerpo := map[string]any{
+		"codigo":     "auditoria_test_" + time.Now().Format("150405"),
+		"nombre":     "Sistema auditoría",
+		"url_acceso": "https://auditoria.test/login",
+	}
+	if estado, _ := postJson(t, entorno, "/cocina/sistemas", cuerpo); estado != http.StatusCreated {
+		t.Fatalf("crear sistema: %d", estado)
 	}
 
 	estado, datos := getJson(t, entorno, "/cocina/auditoria?pagina=1&tamano_pagina=20")
