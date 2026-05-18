@@ -36,15 +36,35 @@ type ResultadoIniciarSesion struct {
 	RequiereSegundoFactor bool
 }
 
+// hashDummyArgon2id es un hash Argon2id válido sobre una clave aleatoria.
+// Se usa para que la verificación de un usuario INEXISTENTE tarde lo mismo
+// que la de uno existente. Sin esto, un atacante puede enumerar usuarios
+// midiendo la diferencia de tiempo entre "no hashea" y "hashea Argon2id".
+// Generado una sola vez al arranque, en runtime.
+var hashDummyArgon2id string
+
+func init() {
+	h, err := cripto.HashearPasswordConArgon2id("dummy-anti-timing-attack-NOTUSED")
+	if err == nil {
+		hashDummyArgon2id = h
+	}
+}
+
 func IniciarSesion(contexto context.Context, conexion *cockroach.ConexionBaseDatos, datos DatosIniciarSesion) (*ResultadoIniciarSesion, error) {
 	correo := validaciones.NormalizarCorreo(datos.CorreoElectronico)
 	if !validaciones.EsCorreoElectronicoValido(correo) {
+		// También gastar el tiempo de Argon2id para no filtrar "correo malformado"
+		_, _ = cripto.VerificarPasswordContraHashArgon2id(datos.PasswordPlana, hashDummyArgon2id)
 		return nil, ErrCredencialesInvalidas
 	}
 
 	usuario, err := ConsultarUsuarioPorCorreo(contexto, conexion.Pool(), correo)
 	if err != nil {
 		if errors.Is(err, ErrUsuarioNoEncontrado) {
+			// Gastar Argon2id igual para que el tiempo de respuesta sea
+			// indistinguible del de un usuario que sí existe pero con pwd
+			// mala (anti enumeración por timing).
+			_, _ = cripto.VerificarPasswordContraHashArgon2id(datos.PasswordPlana, hashDummyArgon2id)
 			return nil, ErrCredencialesInvalidas
 		}
 		return nil, err
