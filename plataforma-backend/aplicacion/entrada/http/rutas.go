@@ -16,6 +16,9 @@ type DependenciasRutas struct {
 
 func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 	limitadorCebo := NuevoLimitadorVelocidad(60, time.Minute).AplicarComoMiddleware()
+	// Permisivo para humano (10 req/segundo de promedio), pero corta DoS si una
+	// sesión robada intenta hacer miles de requests.
+	limitadorAutenticado := NuevoLimitadorVelocidad(600, time.Minute).AplicarComoMiddleware()
 
 	// Salud — fuera del cebo, útil para monitoreo interno
 	enrutador.Get("/salud", ConstruirManejadorSalud(deps.ConexionBaseDatos))
@@ -26,6 +29,7 @@ func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 
 	// Zona privada del gestor
 	enrutador.Route("/cocina", func(privado chi.Router) {
+		privado.Use(limitadorAutenticado)
 		privado.Use(RequiereSesion(deps.ConexionBaseDatos))
 
 		// Páginas placeholder (SPA después)

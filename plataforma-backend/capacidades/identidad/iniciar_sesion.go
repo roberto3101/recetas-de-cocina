@@ -13,8 +13,10 @@ import (
 	"sistemas-unificados/plataforma/gobierno/auditoria"
 )
 
-const MaxIntentosFallidosAntesDeBloqueo = 5
-const MinutosBloqueoTrasFallos = 15
+// Tolerante: 10 fallos antes de bloqueo, y solo 5 min de espera.
+// Un humano normal no falla 10 veces; un bot brute force igual queda parado.
+const MaxIntentosFallidosAntesDeBloqueo = 10
+const MinutosBloqueoTrasFallos = 5
 const HorasVidaSesion = 8
 
 type DatosIniciarSesion struct {

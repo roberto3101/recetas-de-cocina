@@ -290,7 +290,8 @@ func TestSeguridad_LoginConCredencialesInvalidas_NoRevelaSiUserExiste(t *testing
 
 func TestSeguridad_BruteForce_BloqueaTrasIntentosFallidos(t *testing.T) {
 	entorno := montarEntornoPruebas(t)
-	for i := 0; i < 7; i++ {
+	// MaxIntentosFallidosAntesDeBloqueo = 10. Hacemos 12 para garantizar bloqueo.
+	for i := 0; i < 12; i++ {
 		cuerpo := url.Values{}
 		cuerpo.Set("ingrediente", correoSeguridad)
 		cuerpo.Set("codigo", "PasswordIncorrecto_xxx")
@@ -311,9 +312,9 @@ func TestSeguridad_BruteForce_BloqueaTrasIntentosFallidos(t *testing.T) {
 	`, correoSeguridad).Scan(&estado, &intentos); err != nil {
 		t.Fatalf("query estado: %v", err)
 	}
-	t.Logf("BD tras 7 intentos: estado=%s intentos_fallidos=%d", estado, intentos)
+	t.Logf("BD tras 12 intentos: estado=%s intentos_fallidos=%d", estado, intentos)
 	if estado != "BLOQUEADO" {
-		t.Fatalf("usuario debería estar BLOQUEADO tras 7 intentos, está %s con %d intentos", estado, intentos)
+		t.Fatalf("usuario debería estar BLOQUEADO tras 12 intentos, está %s con %d intentos", estado, intentos)
 	}
 
 	// Ahora con password correcta debería seguir bloqueado
