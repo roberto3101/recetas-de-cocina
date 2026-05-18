@@ -18,6 +18,7 @@ export default function PaginaAcceso() {
   const [accesos, setAccesos] = useState<AccesoGuardado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ titulo: string; usuario: string } | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -60,6 +61,36 @@ export default function PaginaAcceso() {
       );
     });
   }, [accesos, sistemaIdFiltro, texto, sistemasPorId]);
+
+  type CredencialAutofill = {
+    usuario: string;
+    password: string;
+    url_acceso: string;
+    url_login: string;
+  };
+
+  async function abrirYCopiar(a: AccesoGuardado) {
+    setError(null);
+    setToast(null);
+    // Abrir pestaña ANTES del fetch para evitar bloqueo de popups en Safari/Chrome
+    const pestana = window.open("about:blank", "_blank");
+    try {
+      const cred = await pedirJson<CredencialAutofill>(`/cocina/boveda/accesos/${a.id}/bookmarklet`);
+      try {
+        await navigator.clipboard.writeText(cred.password);
+      } catch {
+        // Fallback: no se pudo escribir clipboard (permiso negado). Mostrar pwd para copia manual.
+      }
+      if (pestana) {
+        pestana.location.href = cred.url_acceso || cred.url_login;
+      }
+      setToast({ titulo: a.titulo || "acceso", usuario: cred.usuario });
+      setTimeout(() => setToast(null), 12000);
+    } catch (e) {
+      if (pestana) pestana.close();
+      if (e instanceof Error) setError(e.message);
+    }
+  }
 
   async function eliminar(a: AccesoGuardado) {
     if (!confirm(`¿Eliminar el acceso "${a.titulo || a.usuario_externo}"?`)) return;
@@ -110,6 +141,25 @@ export default function PaginaAcceso() {
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{error}</div>
       )}
 
+      {toast && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-start gap-3 flex-wrap">
+          <span className="text-lg">✅</span>
+          <div className="flex-1">
+            <div><strong>{toast.titulo}</strong> abierto en pestaña nueva.</div>
+            <div className="text-xs mt-1">
+              Usuario: <span className="font-mono">{toast.usuario}</span>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(toast.usuario)}
+                className="ml-2 text-emerald-700 underline"
+              >copiar usuario</button>
+            </div>
+            <div className="text-xs">Clave: 📋 ya copiada — Ctrl+V (o ⌘+V) en el campo de contraseña.</div>
+          </div>
+          <button onClick={() => setToast(null)} className="text-stone-500 hover:text-stone-700" aria-label="Cerrar">✕</button>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-md border border-stone-200">
         <table className="min-w-full text-sm">
           <thead className="bg-stone-100 text-left text-xs uppercase tracking-wider text-stone-600">
@@ -135,15 +185,14 @@ export default function PaginaAcceso() {
                 <tr key={a.id} className="border-t border-stone-100 hover:bg-cocina-fondo align-top">
                   <td className="px-3 py-2 text-stone-500">{idx + 1}</td>
                   <td className="px-3 py-2">
-                    <a
-                      href={`/cocina/boveda/accesos/${a.id}/autofill`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-cocina-marron hover:underline"
-                      title="Abrir con login automático"
+                    <button
+                      type="button"
+                      onClick={() => void abrirYCopiar(a)}
+                      className="font-medium text-cocina-marron hover:underline text-left"
+                      title="Abre el sistema y copia la clave al portapapeles"
                     >
                       {a.titulo || s?.nombre || "(sin título)"} ↗
-                    </a>
+                    </button>
                     <div className="text-xs text-stone-400 break-all">{s?.url_acceso ?? "—"}</div>
                   </td>
                   <td className="px-3 py-2 text-cocina-oscuro break-all">
