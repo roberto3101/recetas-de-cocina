@@ -15,6 +15,8 @@ type itemAccesoListado struct {
 	SistemaDestinoId string `json:"sistema_destino_id"`
 	UsuarioExterno   string `json:"usuario_externo"`
 	Observaciones    string `json:"observaciones"`
+	Tipo             string `json:"tipo"`
+	Puerto           *int16 `json:"puerto,omitempty"`
 	Estado           string `json:"estado"`
 	CreadoEn         string `json:"creado_en"`
 }
@@ -37,6 +39,8 @@ func ConstruirHandlerListarAccesos(conexion *cockroach.ConexionBaseDatos, claves
 				SistemaDestinoId: a.SistemaDestinoId.String(),
 				UsuarioExterno:   a.UsuarioExterno,
 				Observaciones:    a.Observaciones,
+				Tipo:             a.Tipo,
+				Puerto:           a.Puerto,
 				Estado:           a.Estado,
 				CreadoEn:         a.CreadoEn.UTC().Format("2006-01-02T15:04:05Z"),
 			})

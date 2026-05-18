@@ -4,9 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { ErrorApi, enviarJson, pedirJson } from "@/plataforma/red/cliente_api";
 import {
   AccesoGuardado,
+  ETIQUETAS_TIPO,
   ListadoAccesos,
   ListadoSistemas,
   SistemaDisponible,
+  TIPOS_ACCESO,
+  TipoAcceso,
 } from "@/capacidades/accesos/tipos";
 
 type CredencialAutofill = {
@@ -380,6 +383,8 @@ function ModalEditarAcceso({ acceso, sistemas, alCerrar, alExito }: { acceso: Ac
   const [sistemaId, setSistemaId] = useState(acceso.sistema_destino_id);
   const [usuario, setUsuario] = useState(acceso.usuario_externo);
   const [claveNueva, setClaveNueva] = useState("");
+  const [tipo, setTipo] = useState<TipoAcceso>(acceso.tipo || "WEB");
+  const [puerto, setPuerto] = useState<string>(acceso.puerto != null ? String(acceso.puerto) : "");
   const [observaciones, setObservaciones] = useState(acceso.observaciones);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -391,6 +396,13 @@ function ModalEditarAcceso({ acceso, sistemas, alCerrar, alExito }: { acceso: Ac
       setError("Título, usuario y sistema son obligatorios");
       return;
     }
+    if (puerto.trim()) {
+      const n = Number(puerto);
+      if (!Number.isInteger(n) || n < 1 || n > 65535) {
+        setError("Puerto debe ser un entero entre 1 y 65535");
+        return;
+      }
+    }
     setEnviando(true);
     try {
       const cuerpo: Record<string, unknown> = {
@@ -398,8 +410,10 @@ function ModalEditarAcceso({ acceso, sistemas, alCerrar, alExito }: { acceso: Ac
         sistema_destino_id: sistemaId,
         usuario_externo: usuario.trim(),
         observaciones: observaciones.trim(),
+        tipo,
       };
       if (claveNueva) cuerpo.password = claveNueva;
+      if (puerto.trim()) cuerpo.puerto = Number(puerto);
       await enviarJson(`/cocina/boveda/accesos/${acceso.id}`, cuerpo, "PUT");
       alExito();
     } catch (e) {
@@ -432,6 +446,20 @@ function ModalEditarAcceso({ acceso, sistemas, alCerrar, alExito }: { acceso: Ac
         <div>
           <label htmlFor="edit-clave" className="etiqueta-campo">Nueva clave <span className="text-stone-400">(opcional, deja vacío para mantener la actual)</span></label>
           <input id="edit-clave" type="password" className="campo-texto" value={claveNueva} onChange={(e) => setClaveNueva(e.target.value)} autoComplete="new-password" maxLength={500} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="edit-puerto" className="etiqueta-campo">Puerto <span className="text-stone-400">(opcional)</span></label>
+            <input id="edit-puerto" type="number" min={1} max={65535} className="campo-texto" value={puerto} onChange={(e) => setPuerto(e.target.value)} placeholder="opcional" />
+          </div>
+          <div>
+            <label htmlFor="edit-tipo" className="etiqueta-campo">Tipo</label>
+            <select id="edit-tipo" className="campo-texto" value={tipo} onChange={(e) => setTipo(e.target.value as TipoAcceso)}>
+              {TIPOS_ACCESO.map((t) => (
+                <option key={t} value={t}>{ETIQUETAS_TIPO[t]}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div>
           <label htmlFor="edit-obs" className="etiqueta-campo">Observaciones</label>

@@ -20,6 +20,8 @@ type cuerpoEditarAcceso struct {
 	UsuarioExterno   string  `json:"usuario_externo"`
 	PasswordPlana    *string `json:"password,omitempty"`
 	Observaciones    string  `json:"observaciones"`
+	Tipo             string  `json:"tipo"`
+	Puerto           *int16  `json:"puerto,omitempty"`
 }
 
 func ConstruirHandlerEditarAcceso(conexion *cockroach.ConexionBaseDatos, clavesCifrado *cripto.ClavesCifrado) http.HandlerFunc {
@@ -62,6 +64,8 @@ func ConstruirHandlerEditarAcceso(conexion *cockroach.ConexionBaseDatos, clavesC
 			UsuarioExterno:   cuerpo.UsuarioExterno,
 			PasswordPlana:    passwordPlana, // si vacío, el repo conserva la original
 			Observaciones:    cuerpo.Observaciones,
+			Tipo:             cuerpo.Tipo,
+			Puerto:           cuerpo.Puerto,
 		}
 		if err := boveda.ActualizarAcceso(peticion.Context(), trans, clavesCifrado, acceso, sesion.UsuarioId); err != nil {
 			if errors.Is(err, boveda.ErrAccesoNoEncontrado) {

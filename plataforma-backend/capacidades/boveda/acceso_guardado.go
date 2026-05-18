@@ -29,11 +29,28 @@ type AccesoGuardado struct {
 	UsuarioExterno    string // plano en memoria, cifrado en BD
 	PasswordPlana     string // solo para entrada (al guardar/editar); vacío al leer
 	Observaciones     string // plano en memoria, cifrado en BD
+	Tipo              string // WEB | ESCRITORIO | FTP | OTRO
+	Puerto            *int16 // opcional, 1..65535
 	Estado            string
 	CreadoEn          time.Time
 	CreadoPor         *uuid.UUID
 	ActualizadoEn     *time.Time
 	ActualizadoPor    *uuid.UUID
+}
+
+const (
+	TipoAccesoWeb        = "WEB"
+	TipoAccesoEscritorio = "ESCRITORIO"
+	TipoAccesoFtp        = "FTP"
+	TipoAccesoOtro       = "OTRO"
+)
+
+func tipoValido(t string) bool {
+	switch t {
+	case TipoAccesoWeb, TipoAccesoEscritorio, TipoAccesoFtp, TipoAccesoOtro:
+		return true
+	}
+	return false
 }
 
 func GuardarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado, a *AccesoGuardado) error {
@@ -66,23 +83,39 @@ func GuardarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, cla
 		observacionesCifradas = oc
 	}
 	titulo := strings.TrimSpace(a.Titulo)
+	tipo := strings.TrimSpace(a.Tipo)
+	if tipo == "" {
+		tipo = TipoAccesoWeb
+	}
+	if !tipoValido(tipo) {
+		return errors.New("tipo inválido (use WEB, ESCRITORIO, FTP u OTRO)")
+	}
+	var puerto any = nil
+	if a.Puerto != nil {
+		if *a.Puerto < 1 || *a.Puerto > 32767 {
+			return errors.New("puerto fuera de rango (1..65535)")
+		}
+		puerto = *a.Puerto
+	}
 	return ejecutor.QueryRow(contexto, `
 		INSERT INTO acceso_guardado (
 			titulo, sistema_destino_id, usuario_externo, usuario_externo_hash,
-			password_cifrada, observaciones, estado, creado_por
-		) VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO', $7)
+			password_cifrada, observaciones, tipo, puerto, estado, creado_por
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVO', $9)
 		ON CONFLICT (sistema_destino_id, usuario_externo_hash) WHERE estado = 'ACTIVO'
 		DO UPDATE SET
 			titulo = EXCLUDED.titulo,
 			usuario_externo = EXCLUDED.usuario_externo,
 			password_cifrada = EXCLUDED.password_cifrada,
 			observaciones = EXCLUDED.observaciones,
+			tipo = EXCLUDED.tipo,
+			puerto = EXCLUDED.puerto,
 			actualizado_en = now(),
 			actualizado_por = EXCLUDED.creado_por
 		RETURNING id, creado_en
 	`,
 		titulo, a.SistemaDestinoId, usuarioCifrado, usuarioHash,
-		passwordCifrada, observacionesCifradas, a.CreadoPor,
+		passwordCifrada, observacionesCifradas, tipo, puerto, a.CreadoPor,
 	).Scan(&a.Id, &a.CreadoEn)
 }
 
@@ -92,12 +125,14 @@ func ConsultarAccesoPorId(contexto context.Context, ejecutor cockroach.EjecutorS
 	var observacionesCifradas []byte
 	err := ejecutor.QueryRow(contexto, `
 		SELECT id, titulo, sistema_destino_id, usuario_externo,
-		       password_cifrada, observaciones, estado, creado_en, creado_por, actualizado_en, actualizado_por
+		       password_cifrada, observaciones, tipo, puerto,
+		       estado, creado_en, creado_por, actualizado_en, actualizado_por
 		FROM acceso_guardado
 		WHERE id = $1 AND estado != 'ELIMINADO'
 	`, id).Scan(
 		&a.Id, &a.Titulo, &a.SistemaDestinoId, &usuarioCifrado,
-		&passwordCifrada, &observacionesCifradas, &a.Estado, &a.CreadoEn, &a.CreadoPor, &a.ActualizadoEn, &a.ActualizadoPor,
+		&passwordCifrada, &observacionesCifradas, &a.Tipo, &a.Puerto,
+		&a.Estado, &a.CreadoEn, &a.CreadoPor, &a.ActualizadoEn, &a.ActualizadoPor,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrAccesoNoEncontrado
@@ -131,7 +166,7 @@ func ConsultarAccesoPorId(contexto context.Context, ejecutor cockroach.EjecutorS
 func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado) ([]AccesoGuardado, error) {
 	filas, err := ejecutor.Query(contexto, `
 		SELECT id, titulo, sistema_destino_id, usuario_externo,
-		       coalesce(observaciones, ''::BYTES), estado, creado_en
+		       coalesce(observaciones, ''::BYTES), tipo, puerto, estado, creado_en
 		FROM acceso_guardado
 		WHERE estado != 'ELIMINADO'
 		ORDER BY creado_en DESC
@@ -148,7 +183,7 @@ func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, cla
 		var usuarioCifrado, observacionesCifradas []byte
 		if err := filas.Scan(
 			&a.Id, &a.Titulo, &a.SistemaDestinoId, &usuarioCifrado,
-			&observacionesCifradas, &a.Estado, &a.CreadoEn,
+			&observacionesCifradas, &a.Tipo, &a.Puerto, &a.Estado, &a.CreadoEn,
 		); err != nil {
 			return nil, err
 		}
@@ -209,6 +244,20 @@ func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 		}
 		passwordCifrada = pc
 	}
+	tipo := strings.TrimSpace(a.Tipo)
+	if tipo == "" {
+		tipo = TipoAccesoWeb
+	}
+	if !tipoValido(tipo) {
+		return errors.New("tipo inválido (use WEB, ESCRITORIO, FTP u OTRO)")
+	}
+	var puerto any = nil
+	if a.Puerto != nil {
+		if *a.Puerto < 1 || *a.Puerto > 32767 {
+			return errors.New("puerto fuera de rango (1..65535)")
+		}
+		puerto = *a.Puerto
+	}
 	tag, err := ejecutor.Exec(contexto, `
 		UPDATE acceso_guardado
 		SET titulo = $2,
@@ -217,8 +266,10 @@ func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 		    usuario_externo_hash = $5,
 		    password_cifrada = CASE WHEN $6::BYTES IS NULL THEN password_cifrada ELSE $6 END,
 		    observaciones = $7,
+		    tipo = $8,
+		    puerto = $9,
 		    actualizado_en = now(),
-		    actualizado_por = $8
+		    actualizado_por = $10
 		WHERE id = $1 AND estado != 'ELIMINADO'
 	`,
 		a.Id,
@@ -228,6 +279,8 @@ func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 		usuarioHash,
 		passwordCifrada,
 		observacionesCifradas,
+		tipo,
+		puerto,
 		actualizadoPor,
 	)
 	if err != nil {

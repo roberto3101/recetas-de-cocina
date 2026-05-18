@@ -18,6 +18,8 @@ type cuerpoGuardarAcceso struct {
 	UsuarioExterno   string `json:"usuario_externo"`
 	PasswordPlana    string `json:"password"`
 	Observaciones    string `json:"observaciones"`
+	Tipo             string `json:"tipo"`
+	Puerto           *int16 `json:"puerto,omitempty"`
 }
 
 func ConstruirHandlerGuardarAcceso(conexion *cockroach.ConexionBaseDatos, clavesCifrado *cripto.ClavesCifrado) http.HandlerFunc {
@@ -46,6 +48,8 @@ func ConstruirHandlerGuardarAcceso(conexion *cockroach.ConexionBaseDatos, claves
 			UsuarioExterno:   cuerpo.UsuarioExterno,
 			PasswordPlana:    cuerpo.PasswordPlana,
 			Observaciones:    cuerpo.Observaciones,
+			Tipo:             cuerpo.Tipo,
+			Puerto:           cuerpo.Puerto,
 			CreadoPor:        &sesion.UsuarioId,
 		}
 
