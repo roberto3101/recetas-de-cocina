@@ -30,7 +30,7 @@ func ConstruirHandlerAutofillAcceso(conexion *cockroach.ConexionBaseDatos, clave
 			ResponderError(escritor, http.StatusBadRequest, codigosError.CodigoPeticionMalFormada, "id inválido")
 			return
 		}
-		acceso, err := boveda.ConsultarAccesoPorId(peticion.Context(), conexion.Pool(), id)
+		acceso, err := boveda.ConsultarAccesoPorId(peticion.Context(), conexion.Pool(), clavesCifrado, id)
 		if err != nil {
 			if errors.Is(err, boveda.ErrAccesoNoEncontrado) {
 				ResponderError(escritor, http.StatusNotFound, "ACCESO_NO_ENCONTRADO", err.Error())
@@ -48,11 +48,6 @@ func ConstruirHandlerAutofillAcceso(conexion *cockroach.ConexionBaseDatos, clave
 		if urlLogin == "" {
 			urlLogin = sistema.UrlAcceso
 		}
-		passwordPlana, err := cripto.DescifrarConAesGcm(clavesCifrado.ClaveBoveda(), acceso.PasswordCifrada)
-		if err != nil {
-			ResponderError(escritor, http.StatusInternalServerError, codigosError.CodigoDescifradoFallido, err.Error())
-			return
-		}
 
 		trans, err := conexion.Pool().Begin(peticion.Context())
 		if err == nil {
@@ -64,8 +59,7 @@ func ConstruirHandlerAutofillAcceso(conexion *cockroach.ConexionBaseDatos, clave
 				Entidad:   "acceso_guardado",
 				EntidadId: &acceso.Id,
 				DatosNuevos: map[string]any{
-					"sistema_codigo":  sistema.Codigo,
-					"usuario_externo": acceso.UsuarioExterno,
+					"sistema_codigo": sistema.Codigo,
 				},
 				IpOrigen:      obtenerIpRemota(peticion),
 				AgenteUsuario: peticion.UserAgent(),
@@ -79,7 +73,7 @@ func ConstruirHandlerAutofillAcceso(conexion *cockroach.ConexionBaseDatos, clave
 			sistema.NombreCampoUsuario,
 			sistema.NombreCampoPassword,
 			acceso.UsuarioExterno,
-			string(passwordPlana),
+			acceso.PasswordPlana,
 			sistema.Nombre,
 		)
 		escritor.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -103,7 +97,7 @@ func ConstruirHandlerAutofillBookmarklet(conexion *cockroach.ConexionBaseDatos, 
 			ResponderError(escritor, http.StatusBadRequest, codigosError.CodigoPeticionMalFormada, "id inválido")
 			return
 		}
-		acceso, err := boveda.ConsultarAccesoPorId(peticion.Context(), conexion.Pool(), id)
+		acceso, err := boveda.ConsultarAccesoPorId(peticion.Context(), conexion.Pool(), clavesCifrado, id)
 		if err != nil {
 			if errors.Is(err, boveda.ErrAccesoNoEncontrado) {
 				ResponderError(escritor, http.StatusNotFound, "ACCESO_NO_ENCONTRADO", err.Error())
@@ -115,11 +109,6 @@ func ConstruirHandlerAutofillBookmarklet(conexion *cockroach.ConexionBaseDatos, 
 		sistema, err := catalogo_sistemas.ConsultarSistemaPorIdDb(peticion.Context(), conexion.Pool(), acceso.SistemaDestinoId)
 		if err != nil {
 			ResponderError(escritor, http.StatusNotFound, codigosError.CodigoSistemaNoEncontrado, err.Error())
-			return
-		}
-		passwordPlana, err := cripto.DescifrarConAesGcm(clavesCifrado.ClaveBoveda(), acceso.PasswordCifrada)
-		if err != nil {
-			ResponderError(escritor, http.StatusInternalServerError, codigosError.CodigoDescifradoFallido, err.Error())
 			return
 		}
 
@@ -143,7 +132,7 @@ func ConstruirHandlerAutofillBookmarklet(conexion *cockroach.ConexionBaseDatos, 
 
 		ResponderExito(escritor, http.StatusOK, map[string]any{
 			"usuario":               acceso.UsuarioExterno,
-			"password":              string(passwordPlana),
+			"password":              acceso.PasswordPlana,
 			"nombre_campo_usuario":  sistema.NombreCampoUsuario,
 			"nombre_campo_password": sistema.NombreCampoPassword,
 			"url_login":             sistema.UrlLogin,

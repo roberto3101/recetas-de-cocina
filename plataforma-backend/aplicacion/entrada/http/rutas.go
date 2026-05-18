@@ -59,7 +59,7 @@ func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 			con2FA.Delete("/sistemas/{id}", ConstruirHandlerEliminarSistema(deps.ConexionBaseDatos))
 
 			// BOVEDA — accesos guardados (titulo + sistema + usuario + clave cifrada)
-			con2FA.Get("/boveda/accesos", ConstruirHandlerListarAccesos(deps.ConexionBaseDatos))
+			con2FA.Get("/boveda/accesos", ConstruirHandlerListarAccesos(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Post("/boveda/accesos", ConstruirHandlerGuardarAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Put("/boveda/accesos/{id}", ConstruirHandlerEditarAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Delete("/boveda/accesos/{id}", ConstruirHandlerDesactivarAcceso(deps.ConexionBaseDatos))

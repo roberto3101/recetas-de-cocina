@@ -43,13 +43,9 @@ func ConstruirHandlerEditarAcceso(conexion *cockroach.ConexionBaseDatos, clavesC
 			return
 		}
 
-		var passwordCifrada []byte
-		if cuerpo.PasswordPlana != nil && *cuerpo.PasswordPlana != "" {
-			passwordCifrada, err = cripto.CifrarConAesGcm(clavesCifrado.ClaveBoveda(), []byte(*cuerpo.PasswordPlana))
-			if err != nil {
-				ResponderError(escritor, http.StatusInternalServerError, errores.CodigoErrorInterno, err.Error())
-				return
-			}
+		var passwordPlana string
+		if cuerpo.PasswordPlana != nil {
+			passwordPlana = *cuerpo.PasswordPlana
 		}
 
 		trans, err := conexion.Pool().Begin(peticion.Context())
@@ -64,10 +60,10 @@ func ConstruirHandlerEditarAcceso(conexion *cockroach.ConexionBaseDatos, clavesC
 			Titulo:           cuerpo.Titulo,
 			SistemaDestinoId: sistemaId,
 			UsuarioExterno:   cuerpo.UsuarioExterno,
-			PasswordCifrada:  passwordCifrada, // si está vacío, el repo conserva la original
+			PasswordPlana:    passwordPlana, // si vacío, el repo conserva la original
 			Observaciones:    cuerpo.Observaciones,
 		}
-		if err := boveda.ActualizarAcceso(peticion.Context(), trans, acceso, sesion.UsuarioId); err != nil {
+		if err := boveda.ActualizarAcceso(peticion.Context(), trans, clavesCifrado, acceso, sesion.UsuarioId); err != nil {
 			if errors.Is(err, boveda.ErrAccesoNoEncontrado) {
 				ResponderError(escritor, http.StatusNotFound, "ACCESO_NO_ENCONTRADO", err.Error())
 				return
@@ -85,8 +81,7 @@ func ConstruirHandlerEditarAcceso(conexion *cockroach.ConexionBaseDatos, clavesC
 			EntidadId: &id,
 			DatosNuevos: map[string]any{
 				"sistema_destino_id": sistemaId.String(),
-				"usuario_externo":    cuerpo.UsuarioExterno,
-				"password_cambiada":  passwordCifrada != nil,
+				"password_cambiada":  passwordPlana != "",
 			},
 			IpOrigen:      obtenerIpRemota(peticion),
 			AgenteUsuario: peticion.UserAgent(),

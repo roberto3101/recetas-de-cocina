@@ -5,6 +5,7 @@ import (
 
 	"sistemas-unificados/capacidades/boveda"
 	"sistemas-unificados/persistencia/cockroach"
+	"sistemas-unificados/plataforma/cripto"
 	"sistemas-unificados/plataforma/gobierno/errores"
 )
 
@@ -18,12 +19,12 @@ type itemAccesoListado struct {
 	CreadoEn         string `json:"creado_en"`
 }
 
-func ConstruirHandlerListarAccesos(conexion *cockroach.ConexionBaseDatos) http.HandlerFunc {
+func ConstruirHandlerListarAccesos(conexion *cockroach.ConexionBaseDatos, clavesCifrado *cripto.ClavesCifrado) http.HandlerFunc {
 	return func(escritor http.ResponseWriter, peticion *http.Request) {
 		if _, ok := ObtenerSesionDelContexto(escritor, peticion); !ok {
 			return
 		}
-		listado, err := boveda.ListarAccesos(peticion.Context(), conexion.Pool())
+		listado, err := boveda.ListarAccesos(peticion.Context(), conexion.Pool(), clavesCifrado)
 		if err != nil {
 			ResponderError(escritor, http.StatusInternalServerError, errores.CodigoErrorInterno, err.Error())
 			return

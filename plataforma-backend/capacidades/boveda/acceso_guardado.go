@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"sistemas-unificados/persistencia/cockroach"
+	"sistemas-unificados/plataforma/cripto"
 )
 
 var ErrAccesoNoEncontrado = errors.New("acceso guardado no encontrado")
@@ -17,13 +18,16 @@ var ErrUsuarioRequerido = errors.New("usuario es obligatorio")
 var ErrPasswordRequerida = errors.New("password es obligatoria")
 var ErrSistemaRequerido = errors.New("sistema_destino_id es obligatorio")
 
+// AccesoGuardado representa el acceso en memoria (campos en plano).
+// En BD usuario_externo, observaciones y password viven cifrados con AES-256-GCM.
+// usuario_externo_hash (HMAC-SHA256) se usa para el UNIQUE INDEX.
 type AccesoGuardado struct {
 	Id                uuid.UUID
 	Titulo            string
 	SistemaDestinoId  uuid.UUID
-	UsuarioExterno    string
-	PasswordCifrada   []byte
-	Observaciones     string
+	UsuarioExterno    string // plano en memoria, cifrado en BD
+	PasswordPlana     string // solo para entrada (al guardar/editar); vacío al leer
+	Observaciones     string // plano en memoria, cifrado en BD
 	Estado            string
 	CreadoEn          time.Time
 	CreadoPor         *uuid.UUID
@@ -31,62 +35,102 @@ type AccesoGuardado struct {
 	ActualizadoPor    *uuid.UUID
 }
 
-func GuardarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, a *AccesoGuardado) error {
-	if strings.TrimSpace(a.UsuarioExterno) == "" {
+func GuardarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado, a *AccesoGuardado) error {
+	usuario := strings.TrimSpace(a.UsuarioExterno)
+	if usuario == "" {
 		return ErrUsuarioRequerido
 	}
-	if len(a.PasswordCifrada) == 0 {
+	if a.PasswordPlana == "" {
 		return ErrPasswordRequerida
 	}
 	if a.SistemaDestinoId == uuid.Nil {
 		return ErrSistemaRequerido
 	}
+	clave := claves.ClaveBoveda()
+	usuarioCifrado, err := cripto.CifrarConAesGcm(clave, []byte(usuario))
+	if err != nil {
+		return err
+	}
+	usuarioHash := cripto.HmacSha256(clave, usuario)
+	passwordCifrada, err := cripto.CifrarConAesGcm(clave, []byte(a.PasswordPlana))
+	if err != nil {
+		return err
+	}
+	var observacionesCifradas any = nil
+	if obs := strings.TrimSpace(a.Observaciones); obs != "" {
+		oc, err := cripto.CifrarConAesGcm(clave, []byte(obs))
+		if err != nil {
+			return err
+		}
+		observacionesCifradas = oc
+	}
 	titulo := strings.TrimSpace(a.Titulo)
 	return ejecutor.QueryRow(contexto, `
 		INSERT INTO acceso_guardado (
-			titulo, sistema_destino_id, usuario_externo,
+			titulo, sistema_destino_id, usuario_externo, usuario_externo_hash,
 			password_cifrada, observaciones, estado, creado_por
-		) VALUES ($1, $2, $3, $4, $5, 'ACTIVO', $6)
-		ON CONFLICT (sistema_destino_id, usuario_externo) WHERE estado = 'ACTIVO'
+		) VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVO', $7)
+		ON CONFLICT (sistema_destino_id, usuario_externo_hash) WHERE estado = 'ACTIVO'
 		DO UPDATE SET
 			titulo = EXCLUDED.titulo,
+			usuario_externo = EXCLUDED.usuario_externo,
 			password_cifrada = EXCLUDED.password_cifrada,
 			observaciones = EXCLUDED.observaciones,
 			actualizado_en = now(),
 			actualizado_por = EXCLUDED.creado_por
 		RETURNING id, creado_en
 	`,
-		titulo, a.SistemaDestinoId, strings.TrimSpace(a.UsuarioExterno),
-		a.PasswordCifrada, nullableTexto(a.Observaciones), a.CreadoPor,
+		titulo, a.SistemaDestinoId, usuarioCifrado, usuarioHash,
+		passwordCifrada, observacionesCifradas, a.CreadoPor,
 	).Scan(&a.Id, &a.CreadoEn)
 }
 
-func ConsultarAccesoPorId(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID) (*AccesoGuardado, error) {
+func ConsultarAccesoPorId(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado, id uuid.UUID) (*AccesoGuardado, error) {
 	a := &AccesoGuardado{}
-	var observaciones *string
+	var usuarioCifrado, passwordCifrada []byte
+	var observacionesCifradas []byte
 	err := ejecutor.QueryRow(contexto, `
 		SELECT id, titulo, sistema_destino_id, usuario_externo,
 		       password_cifrada, observaciones, estado, creado_en, creado_por, actualizado_en, actualizado_por
 		FROM acceso_guardado
 		WHERE id = $1 AND estado != 'ELIMINADO'
 	`, id).Scan(
-		&a.Id, &a.Titulo, &a.SistemaDestinoId, &a.UsuarioExterno,
-		&a.PasswordCifrada, &observaciones, &a.Estado, &a.CreadoEn, &a.CreadoPor, &a.ActualizadoEn, &a.ActualizadoPor,
+		&a.Id, &a.Titulo, &a.SistemaDestinoId, &usuarioCifrado,
+		&passwordCifrada, &observacionesCifradas, &a.Estado, &a.CreadoEn, &a.CreadoPor, &a.ActualizadoEn, &a.ActualizadoPor,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrAccesoNoEncontrado
 	}
-	if observaciones != nil {
-		a.Observaciones = *observaciones
+	if err != nil {
+		return nil, err
 	}
-	return a, err
+	clave := claves.ClaveBoveda()
+	usuario, err := cripto.DescifrarConAesGcm(clave, usuarioCifrado)
+	if err != nil {
+		return nil, err
+	}
+	a.UsuarioExterno = string(usuario)
+	passwordPlana, err := cripto.DescifrarConAesGcm(clave, passwordCifrada)
+	if err != nil {
+		return nil, err
+	}
+	a.PasswordPlana = string(passwordPlana)
+	if len(observacionesCifradas) > 0 {
+		obs, err := cripto.DescifrarConAesGcm(clave, observacionesCifradas)
+		if err != nil {
+			return nil, err
+		}
+		a.Observaciones = string(obs)
+	}
+	return a, nil
 }
 
-// ListarAccesos devuelve ACTIVO + REVOCADO. Excluye ELIMINADO.
-func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql) ([]AccesoGuardado, error) {
+// ListarAccesos devuelve ACTIVO + REVOCADO. Descifra usuario_externo y observaciones.
+// NO descifra password (no se devuelve en listado).
+func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado) ([]AccesoGuardado, error) {
 	filas, err := ejecutor.Query(contexto, `
 		SELECT id, titulo, sistema_destino_id, usuario_externo,
-		       coalesce(observaciones,''), estado, creado_en
+		       coalesce(observaciones, ''::BYTES), estado, creado_en
 		FROM acceso_guardado
 		WHERE estado != 'ELIMINADO'
 		ORDER BY creado_en DESC
@@ -96,44 +140,83 @@ func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql) ([]
 	}
 	defer filas.Close()
 
+	clave := claves.ClaveBoveda()
 	resultado := make([]AccesoGuardado, 0)
 	for filas.Next() {
 		a := AccesoGuardado{}
+		var usuarioCifrado, observacionesCifradas []byte
 		if err := filas.Scan(
-			&a.Id, &a.Titulo, &a.SistemaDestinoId, &a.UsuarioExterno,
-			&a.Observaciones, &a.Estado, &a.CreadoEn,
+			&a.Id, &a.Titulo, &a.SistemaDestinoId, &usuarioCifrado,
+			&observacionesCifradas, &a.Estado, &a.CreadoEn,
 		); err != nil {
 			return nil, err
+		}
+		usuario, err := cripto.DescifrarConAesGcm(clave, usuarioCifrado)
+		if err != nil {
+			return nil, err
+		}
+		a.UsuarioExterno = string(usuario)
+		if len(observacionesCifradas) > 0 {
+			obs, err := cripto.DescifrarConAesGcm(clave, observacionesCifradas)
+			if err != nil {
+				return nil, err
+			}
+			a.Observaciones = string(obs)
 		}
 		resultado = append(resultado, a)
 	}
 	return resultado, filas.Err()
 }
 
-func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, a *AccesoGuardado, actualizadoPor uuid.UUID) error {
-	if strings.TrimSpace(a.UsuarioExterno) == "" {
+func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado, a *AccesoGuardado, actualizadoPor uuid.UUID) error {
+	usuario := strings.TrimSpace(a.UsuarioExterno)
+	if usuario == "" {
 		return ErrUsuarioRequerido
 	}
 	if a.SistemaDestinoId == uuid.Nil {
 		return ErrSistemaRequerido
+	}
+	clave := claves.ClaveBoveda()
+	usuarioCifrado, err := cripto.CifrarConAesGcm(clave, []byte(usuario))
+	if err != nil {
+		return err
+	}
+	usuarioHash := cripto.HmacSha256(clave, usuario)
+	var observacionesCifradas any = nil
+	if obs := strings.TrimSpace(a.Observaciones); obs != "" {
+		oc, err := cripto.CifrarConAesGcm(clave, []byte(obs))
+		if err != nil {
+			return err
+		}
+		observacionesCifradas = oc
+	}
+	var passwordCifrada any = nil
+	if a.PasswordPlana != "" {
+		pc, err := cripto.CifrarConAesGcm(clave, []byte(a.PasswordPlana))
+		if err != nil {
+			return err
+		}
+		passwordCifrada = pc
 	}
 	tag, err := ejecutor.Exec(contexto, `
 		UPDATE acceso_guardado
 		SET titulo = $2,
 		    sistema_destino_id = $3,
 		    usuario_externo = $4,
-		    password_cifrada = CASE WHEN $5::BYTES IS NULL THEN password_cifrada ELSE $5 END,
-		    observaciones = $6,
+		    usuario_externo_hash = $5,
+		    password_cifrada = CASE WHEN $6::BYTES IS NULL THEN password_cifrada ELSE $6 END,
+		    observaciones = $7,
 		    actualizado_en = now(),
-		    actualizado_por = $7
+		    actualizado_por = $8
 		WHERE id = $1 AND estado != 'ELIMINADO'
 	`,
 		a.Id,
 		strings.TrimSpace(a.Titulo),
 		a.SistemaDestinoId,
-		strings.TrimSpace(a.UsuarioExterno),
-		nullableBytes(a.PasswordCifrada),
-		nullableTexto(a.Observaciones),
+		usuarioCifrado,
+		usuarioHash,
+		passwordCifrada,
+		observacionesCifradas,
 		actualizadoPor,
 	)
 	if err != nil {
@@ -145,7 +228,6 @@ func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 	return nil
 }
 
-// DesactivarAcceso marca como REVOCADO. Reversible con ReactivarAcceso.
 func DesactivarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID, actualizadoPor uuid.UUID) error {
 	tag, err := ejecutor.Exec(contexto, `
 		UPDATE acceso_guardado
@@ -163,7 +245,6 @@ func DesactivarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 	return nil
 }
 
-// ReactivarAcceso vuelve a ACTIVO. Falla si la combinación (sistema, usuario) ya está activa.
 func ReactivarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID, actualizadoPor uuid.UUID) error {
 	tag, err := ejecutor.Exec(contexto, `
 		UPDATE acceso_guardado
@@ -179,18 +260,4 @@ func ReactivarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, i
 		return ErrAccesoNoEncontrado
 	}
 	return nil
-}
-
-func nullableTexto(valor string) any {
-	if valor == "" {
-		return nil
-	}
-	return valor
-}
-
-func nullableBytes(valor []byte) any {
-	if len(valor) == 0 {
-		return nil
-	}
-	return valor
 }

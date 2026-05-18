@@ -40,17 +40,11 @@ func ConstruirHandlerGuardarAcceso(conexion *cockroach.ConexionBaseDatos, claves
 			return
 		}
 
-		passwordCifrada, err := cripto.CifrarConAesGcm(clavesCifrado.ClaveBoveda(), []byte(cuerpo.PasswordPlana))
-		if err != nil {
-			ResponderError(escritor, http.StatusInternalServerError, errores.CodigoErrorInterno, err.Error())
-			return
-		}
-
 		acceso := &boveda.AccesoGuardado{
 			Titulo:           cuerpo.Titulo,
 			SistemaDestinoId: sistemaId,
 			UsuarioExterno:   cuerpo.UsuarioExterno,
-			PasswordCifrada:  passwordCifrada,
+			PasswordPlana:    cuerpo.PasswordPlana,
 			Observaciones:    cuerpo.Observaciones,
 			CreadoPor:        &sesion.UsuarioId,
 		}
@@ -62,7 +56,7 @@ func ConstruirHandlerGuardarAcceso(conexion *cockroach.ConexionBaseDatos, claves
 		}
 		defer trans.Rollback(peticion.Context())
 
-		if err := boveda.GuardarAcceso(peticion.Context(), trans, acceso); err != nil {
+		if err := boveda.GuardarAcceso(peticion.Context(), trans, clavesCifrado, acceso); err != nil {
 			ResponderError(escritor, http.StatusBadRequest, errores.CodigoValidacionFallida, err.Error())
 			return
 		}
