@@ -1,0 +1,62 @@
+═══════════════════════════════════════════════
+TESTS — COMANDOS PARA COPIAR Y PEGAR EN POWERSHELL
+═══════════════════════════════════════════════
+
+PREREQUISITOS para tests con BD (integración + E2E):
+1. CockroachDB local corriendo en :26258
+   (usa comandos/comandos.txt para arrancarlo)
+2. Operador smoke@codeplex.pe creado en BD local:
+
+   cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; $env:OPERADOR_INICIAL_CORREO="smoke@codeplex.pe"; $env:OPERADOR_INICIAL_PASSWORD="Smoke_Test_2026!"; go run ./cmd/bootstrap
+
+
+═══ GO TESTS (backend) ═══
+
+Todos:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go test -count=1 ./...
+
+Solo unit (sin BD, rápido):
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go test -count=1 ./plataforma/cripto/... ./compartido/...
+
+Solo bóveda (cifrado + roundtrip):
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go test -count=1 -v ./capacidades/boveda/...
+
+Solo seguridad (rate limit, SQL injection, etc.):
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go test -count=1 -v ./pruebas/seguridad/...
+
+Un test específico:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go test -count=1 -v -run TestBoveda_BDEsCifrada ./capacidades/boveda/...
+
+
+═══ PLAYWRIGHT E2E (frontend, requiere backend+frontend corriendo) ═══
+
+Antes de correr: arranca backend (comandos/backend.ps1 o `go run .`) y frontend (`npm run dev`).
+
+Todos los E2E:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright test
+
+Con UI visual (ver lo que hace en browser):
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright test --ui
+
+Con browser visible (sin UI):
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright test --headed
+
+Solo bóveda:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright test boveda.spec.ts
+
+Solo sesión:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright test sesion.spec.ts
+
+Solo seguridad:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright test seguridad.spec.ts
+
+Un test específico por nombre:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright test -g "registrar"
+
+Ver el último reporte HTML:
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-frontend; npx playwright show-report
+
+
+═══ TODO EN UNA SOLA LÍNEA (todo verde) ═══
+
+cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go test -count=1 ./...; cd ..\plataforma-frontend; npx playwright test

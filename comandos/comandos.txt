@@ -6,3 +6,6 @@ cd C:\Users\user\Desktop\sistemas-unificados\plataforma-backend; go run .
 
 COCKROACH:
 C:\cockroachdb\cockroach.exe start-single-node --insecure --listen-addr=localhost:26258 --http-addr=localhost:8090 --store=C:\Users\user\Desktop\sistemas-unificados\database\cockroach-data
+
+COCKROACH NO ARRANCA (lock files o proceso fantasma):
+Get-Process cockroach -ErrorAction SilentlyContinue | Stop-Process -Force; Get-ChildItem "C:\Users\user\Desktop\sistemas-unificados\database\cockroach-data" -Filter "cockroach-temp*" -Directory | Remove-Item -Recurse -Force

@@ -3,6 +3,7 @@ package boveda
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -151,17 +152,27 @@ func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, cla
 		); err != nil {
 			return nil, err
 		}
+		// Tolerante a filas cifradas con un KEK distinto (residuos de tests/migraciones):
+		// si no se puede descifrar, logueamos y la omitimos en lugar de tumbar todo el listado.
 		usuario, err := cripto.DescifrarConAesGcm(clave, usuarioCifrado)
 		if err != nil {
-			return nil, err
+			slog.Warn("acceso_guardado.descifrado_omitido",
+				"id", a.Id.String(),
+				"detalle", "no se pudo descifrar usuario_externo; probablemente cifrado con otra KEK",
+				"error", err.Error())
+			continue
 		}
 		a.UsuarioExterno = string(usuario)
 		if len(observacionesCifradas) > 0 {
 			obs, err := cripto.DescifrarConAesGcm(clave, observacionesCifradas)
 			if err != nil {
-				return nil, err
+				slog.Warn("acceso_guardado.observaciones_no_descifradas",
+					"id", a.Id.String(),
+					"error", err.Error())
+				a.Observaciones = ""
+			} else {
+				a.Observaciones = string(obs)
 			}
-			a.Observaciones = string(obs)
 		}
 		resultado = append(resultado, a)
 	}
