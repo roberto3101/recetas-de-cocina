@@ -62,7 +62,8 @@ func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 			con2FA.Get("/boveda/accesos", ConstruirHandlerListarAccesos(deps.ConexionBaseDatos))
 			con2FA.Post("/boveda/accesos", ConstruirHandlerGuardarAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Put("/boveda/accesos/{id}", ConstruirHandlerEditarAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
-			con2FA.Delete("/boveda/accesos/{id}", ConstruirHandlerEliminarAcceso(deps.ConexionBaseDatos))
+			con2FA.Delete("/boveda/accesos/{id}", ConstruirHandlerDesactivarAcceso(deps.ConexionBaseDatos))
+			con2FA.Post("/boveda/accesos/{id}/reactivar", ConstruirHandlerReactivarAcceso(deps.ConexionBaseDatos))
 			con2FA.Get("/boveda/accesos/{id}/autofill", ConstruirHandlerAutofillAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Get("/boveda/accesos/{id}/bookmarklet", ConstruirHandlerAutofillBookmarklet(deps.ConexionBaseDatos, deps.ClavesCifrado))
 

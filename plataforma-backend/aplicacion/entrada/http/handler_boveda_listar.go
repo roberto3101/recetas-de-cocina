@@ -23,7 +23,7 @@ func ConstruirHandlerListarAccesos(conexion *cockroach.ConexionBaseDatos) http.H
 		if _, ok := ObtenerSesionDelContexto(escritor, peticion); !ok {
 			return
 		}
-		listado, err := boveda.ListarAccesosActivos(peticion.Context(), conexion.Pool())
+		listado, err := boveda.ListarAccesos(peticion.Context(), conexion.Pool())
 		if err != nil {
 			ResponderError(escritor, http.StatusInternalServerError, errores.CodigoErrorInterno, err.Error())
 			return

@@ -68,7 +68,7 @@ func ConsultarAccesoPorId(contexto context.Context, ejecutor cockroach.EjecutorS
 		SELECT id, titulo, sistema_destino_id, usuario_externo,
 		       password_cifrada, observaciones, estado, creado_en, creado_por, actualizado_en, actualizado_por
 		FROM acceso_guardado
-		WHERE id = $1 AND estado = 'ACTIVO'
+		WHERE id = $1 AND estado != 'ELIMINADO'
 	`, id).Scan(
 		&a.Id, &a.Titulo, &a.SistemaDestinoId, &a.UsuarioExterno,
 		&a.PasswordCifrada, &observaciones, &a.Estado, &a.CreadoEn, &a.CreadoPor, &a.ActualizadoEn, &a.ActualizadoPor,
@@ -82,12 +82,13 @@ func ConsultarAccesoPorId(contexto context.Context, ejecutor cockroach.EjecutorS
 	return a, err
 }
 
-func ListarAccesosActivos(contexto context.Context, ejecutor cockroach.EjecutorSql) ([]AccesoGuardado, error) {
+// ListarAccesos devuelve ACTIVO + REVOCADO. Excluye ELIMINADO.
+func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql) ([]AccesoGuardado, error) {
 	filas, err := ejecutor.Query(contexto, `
 		SELECT id, titulo, sistema_destino_id, usuario_externo,
 		       coalesce(observaciones,''), estado, creado_en
 		FROM acceso_guardado
-		WHERE estado = 'ACTIVO'
+		WHERE estado != 'ELIMINADO'
 		ORDER BY creado_en DESC
 	`)
 	if err != nil {
@@ -125,7 +126,7 @@ func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 		    observaciones = $6,
 		    actualizado_en = now(),
 		    actualizado_por = $7
-		WHERE id = $1 AND estado = 'ACTIVO'
+		WHERE id = $1 AND estado != 'ELIMINADO'
 	`,
 		a.Id,
 		strings.TrimSpace(a.Titulo),
@@ -144,14 +145,33 @@ func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 	return nil
 }
 
-func EliminarAccesoLogico(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID, eliminadoPor uuid.UUID) error {
+// DesactivarAcceso marca como REVOCADO. Reversible con ReactivarAcceso.
+func DesactivarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID, actualizadoPor uuid.UUID) error {
 	tag, err := ejecutor.Exec(contexto, `
 		UPDATE acceso_guardado
-		SET estado = 'ELIMINADO',
+		SET estado = 'REVOCADO',
 		    actualizado_en = now(),
 		    actualizado_por = $2
 		WHERE id = $1 AND estado = 'ACTIVO'
-	`, id, eliminadoPor)
+	`, id, actualizadoPor)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrAccesoNoEncontrado
+	}
+	return nil
+}
+
+// ReactivarAcceso vuelve a ACTIVO. Falla si la combinación (sistema, usuario) ya está activa.
+func ReactivarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID, actualizadoPor uuid.UUID) error {
+	tag, err := ejecutor.Exec(contexto, `
+		UPDATE acceso_guardado
+		SET estado = 'ACTIVO',
+		    actualizado_en = now(),
+		    actualizado_por = $2
+		WHERE id = $1 AND estado = 'REVOCADO'
+	`, id, actualizadoPor)
 	if err != nil {
 		return err
 	}

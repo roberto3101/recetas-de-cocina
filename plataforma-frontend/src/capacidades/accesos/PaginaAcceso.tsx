@@ -16,18 +16,23 @@ type CredencialAutofill = {
   url_login: string;
 };
 
+type FiltroEstado = "ACTIVO" | "REVOCADO" | "TODOS";
+
 export default function PaginaAcceso() {
   const navegar = useNavigate();
   const [texto, setTexto] = useState("");
   const [sistemaIdFiltro, setSistemaIdFiltro] = useState<string>("");
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("ACTIVO");
 
   const [sistemas, setSistemas] = useState<SistemaDisponible[]>([]);
   const [accesos, setAccesos] = useState<AccesoGuardado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ titulo: string; usuario: string; password: string; copiada: boolean } | null>(null);
 
-  const [accesoViendo, setAccesoViendo] = useState<AccesoGuardado | null>(null);
+  const [pwdsVisibles, setPwdsVisibles] = useState<Record<string, boolean>>({});
+  const [pwdsCache, setPwdsCache] = useState<Record<string, string>>({});
+  const [mensajeFlash, setMensajeFlash] = useState<string | null>(null);
+
   const [accesoEditando, setAccesoEditando] = useState<AccesoGuardado | null>(null);
 
   const cargar = useCallback(async () => {
@@ -47,9 +52,7 @@ export default function PaginaAcceso() {
     }
   }, []);
 
-  useEffect(() => {
-    void cargar();
-  }, [cargar]);
+  useEffect(() => { void cargar(); }, [cargar]);
 
   const sistemasPorId = useMemo(() => {
     const m = new Map<string, SistemaDisponible>();
@@ -60,6 +63,7 @@ export default function PaginaAcceso() {
   const accesosFiltrados = useMemo(() => {
     const t = texto.trim().toLowerCase();
     return accesos.filter((a) => {
+      if (filtroEstado !== "TODOS" && a.estado !== filtroEstado) return false;
       if (sistemaIdFiltro && a.sistema_destino_id !== sistemaIdFiltro) return false;
       if (!t) return true;
       const s = sistemasPorId.get(a.sistema_destino_id);
@@ -70,43 +74,74 @@ export default function PaginaAcceso() {
         (s?.url_acceso.toLowerCase().includes(t) ?? false)
       );
     });
-  }, [accesos, sistemaIdFiltro, texto, sistemasPorId]);
+  }, [accesos, sistemaIdFiltro, texto, filtroEstado, sistemasPorId]);
 
-  async function abrirYCopiar(a: AccesoGuardado) {
+  function flash(msg: string) {
+    setMensajeFlash(msg);
+    setTimeout(() => setMensajeFlash((m) => (m === msg ? null : m)), 1800);
+  }
+
+  async function copiar(valor: string, etiqueta: string) {
+    try {
+      await navigator.clipboard.writeText(valor);
+      flash(`${etiqueta} copiado`);
+    } catch {
+      flash("No se pudo copiar (clipboard bloqueado)");
+    }
+  }
+
+  async function obtenerPwd(a: AccesoGuardado): Promise<string | null> {
+    if (pwdsCache[a.id]) return pwdsCache[a.id];
+    try {
+      const cred = await pedirJson<CredencialAutofill>(`/cocina/boveda/accesos/${a.id}/bookmarklet`);
+      setPwdsCache((c) => ({ ...c, [a.id]: cred.password }));
+      return cred.password;
+    } catch (e) {
+      if (e instanceof Error) setError(e.message);
+      return null;
+    }
+  }
+
+  async function togglePwdVisible(a: AccesoGuardado) {
+    if (!pwdsCache[a.id]) {
+      const p = await obtenerPwd(a);
+      if (!p) return;
+    }
+    setPwdsVisibles((v) => ({ ...v, [a.id]: !v[a.id] }));
+  }
+
+  async function copiarPwd(a: AccesoGuardado) {
+    const p = pwdsCache[a.id] ?? (await obtenerPwd(a));
+    if (p) void copiar(p, "Clave");
+  }
+
+  async function abrirEnPestana(a: AccesoGuardado) {
     setError(null);
-    setToast(null);
     const pestana = window.open("about:blank", "_blank");
     try {
       const cred = await pedirJson<CredencialAutofill>(`/cocina/boveda/accesos/${a.id}/bookmarklet`);
-      let copiada = false;
-      try {
-        await navigator.clipboard.writeText(cred.password);
-        copiada = true;
-      } catch {
-        copiada = false;
-      }
-      if (pestana) {
-        pestana.location.href = cred.url_acceso || cred.url_login;
-      }
-      setToast({ titulo: a.titulo || "acceso", usuario: cred.usuario, password: cred.password, copiada });
+      setPwdsCache((c) => ({ ...c, [a.id]: cred.password }));
+      try { await navigator.clipboard.writeText(cred.password); flash("Clave copiada"); } catch { /* silent */ }
+      if (pestana) pestana.location.href = cred.url_acceso || cred.url_login;
     } catch (e) {
       if (pestana) pestana.close();
       if (e instanceof Error) setError(e.message);
     }
   }
 
-  async function copiarTexto(t: string) {
+  async function desactivar(a: AccesoGuardado) {
+    if (!confirm(`¿Desactivar "${a.titulo || a.usuario_externo}"? Lo podrás reactivar después.`)) return;
     try {
-      await navigator.clipboard.writeText(t);
-    } catch {
-      // ignore
+      await enviarJson(`/cocina/boveda/accesos/${a.id}`, undefined, "DELETE");
+      void cargar();
+    } catch (e) {
+      if (e instanceof ErrorApi || e instanceof Error) setError(e.message);
     }
   }
 
-  async function eliminar(a: AccesoGuardado) {
-    if (!confirm(`¿Eliminar el acceso "${a.titulo || a.usuario_externo}"?`)) return;
+  async function reactivar(a: AccesoGuardado) {
     try {
-      await enviarJson(`/cocina/boveda/accesos/${a.id}`, undefined, "DELETE");
+      await enviarJson(`/cocina/boveda/accesos/${a.id}/reactivar`, undefined, "POST");
       void cargar();
     } catch (e) {
       if (e instanceof ErrorApi || e instanceof Error) setError(e.message);
@@ -125,7 +160,7 @@ export default function PaginaAcceso() {
         <button onClick={() => navegar("/panel/registro")} className="boton-primario">+ Registrar acceso</button>
       </div>
 
-      <form className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]" onSubmit={(e) => e.preventDefault()}>
+      <form className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr_1fr]" onSubmit={(e) => e.preventDefault()}>
         <input
           type="text"
           placeholder="Buscar por título, usuario o sistema…"
@@ -133,15 +168,16 @@ export default function PaginaAcceso() {
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
         />
-        <select
-          className="campo-texto"
-          value={sistemaIdFiltro}
-          onChange={(e) => setSistemaIdFiltro(e.target.value)}
-        >
+        <select className="campo-texto" value={sistemaIdFiltro} onChange={(e) => setSistemaIdFiltro(e.target.value)}>
           <option value="">Todas las URLs</option>
           {sistemas.map((s) => (
             <option key={s.id} value={s.id}>{s.nombre}</option>
           ))}
+        </select>
+        <select className="campo-texto" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)}>
+          <option value="ACTIVO">Solo activos</option>
+          <option value="REVOCADO">Solo inactivos</option>
+          <option value="TODOS">Todos</option>
         </select>
       </form>
 
@@ -149,15 +185,12 @@ export default function PaginaAcceso() {
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{error}</div>
       )}
 
-      {toast && <ToastAutofill toast={toast} alCerrar={() => setToast(null)} alCopiar={copiarTexto} />}
-
-      {accesoViendo && (
-        <ModalVerDetalles
-          acceso={accesoViendo}
-          sistema={sistemasPorId.get(accesoViendo.sistema_destino_id)}
-          alCerrar={() => setAccesoViendo(null)}
-        />
+      {mensajeFlash && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-emerald-600 px-4 py-2 text-sm text-white shadow-lg">
+          ✅ {mensajeFlash}
+        </div>
       )}
+
       {accesoEditando && (
         <ModalEditarAcceso
           acceso={accesoEditando}
@@ -174,45 +207,78 @@ export default function PaginaAcceso() {
               <th className="w-12 px-3 py-2">#</th>
               <th className="px-3 py-2">Título / URL</th>
               <th className="px-3 py-2">Usuario</th>
+              <th className="px-3 py-2">Contraseña</th>
               <th className="px-3 py-2 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {cargando && (
-              <tr><td colSpan={4} className="px-3 py-6 text-center text-stone-500">Cargando…</td></tr>
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-stone-500">Cargando…</td></tr>
             )}
             {!cargando && accesosFiltrados.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-6 text-center text-stone-500">
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-stone-500">
                 No hay accesos. Click en <strong>+ Registrar acceso</strong>.
               </td></tr>
             )}
             {!cargando && accesosFiltrados.map((a, idx) => {
               const s = sistemasPorId.get(a.sistema_destino_id);
+              const inactivo = a.estado === "REVOCADO";
+              const pwdVisible = !!pwdsVisibles[a.id];
+              const pwd = pwdsCache[a.id];
               return (
-                <tr key={a.id} className="border-t border-stone-100 hover:bg-cocina-fondo align-top">
+                <tr key={a.id} className={`border-t border-stone-100 hover:bg-cocina-fondo align-top ${inactivo ? "opacity-60" : ""}`}>
                   <td className="px-3 py-2 text-stone-500">{idx + 1}</td>
                   <td className="px-3 py-2">
                     <button
                       type="button"
-                      onClick={() => void abrirYCopiar(a)}
+                      onClick={() => void abrirEnPestana(a)}
                       className="font-medium text-cocina-marron hover:underline text-left"
                       title="Abre el sistema y copia la clave al portapapeles"
+                      disabled={inactivo}
                     >
                       {a.titulo || s?.nombre || "(sin título)"} ↗
                     </button>
+                    {inactivo && <span className="ml-2 text-[10px] bg-stone-300 text-stone-700 px-2 py-0.5 rounded">inactivo</span>}
                     <div className="text-xs text-stone-400 break-all">{s?.url_acceso ?? "—"}</div>
                   </td>
-                  <td className="px-3 py-2 text-cocina-oscuro break-all">
-                    {a.usuario_externo}
+                  <td className="px-3 py-2 text-cocina-oscuro">
+                    <button
+                      type="button"
+                      onClick={() => void copiar(a.usuario_externo, "Usuario")}
+                      className="text-left break-all hover:bg-stone-100 rounded px-1 py-0.5"
+                      title="Click para copiar"
+                    >
+                      {a.usuario_externo}
+                    </button>
                     {a.observaciones && (
                       <div className="text-xs text-stone-400">{a.observaciones}</div>
                     )}
                   </td>
+                  <td className="px-3 py-2 text-cocina-oscuro">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void copiarPwd(a)}
+                        className="font-mono text-xs hover:bg-stone-100 rounded px-1 py-0.5 flex-1 text-left break-all"
+                        title="Click para copiar"
+                      >
+                        {pwdVisible && pwd ? pwd : "••••••••"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void togglePwdVisible(a)}
+                        className="text-stone-500 hover:text-cocina-marron shrink-0"
+                        title={pwdVisible ? "Ocultar" : "Ver"}
+                      >{pwdVisible ? "🙈" : "👁️"}</button>
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <div className="flex flex-wrap justify-end items-center gap-x-3 gap-y-1">
-                      <button onClick={() => setAccesoViendo(a)} className="text-xs text-cocina-marron hover:underline">Ver</button>
                       <button onClick={() => setAccesoEditando(a)} className="text-xs text-cocina-marron hover:underline">Editar</button>
-                      <button onClick={() => eliminar(a)} className="text-xs text-red-700 hover:underline">Eliminar</button>
+                      {inactivo
+                        ? <button onClick={() => void reactivar(a)} className="text-xs text-emerald-700 hover:underline">Reactivar</button>
+                        : <button onClick={() => void desactivar(a)} className="text-xs text-red-700 hover:underline">Desactivar</button>
+                      }
                     </div>
                   </td>
                 </tr>
@@ -220,39 +286,6 @@ export default function PaginaAcceso() {
             })}
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-function ToastAutofill({ toast, alCerrar, alCopiar }: { toast: { titulo: string; usuario: string; password: string; copiada: boolean }; alCerrar: () => void; alCopiar: (t: string) => Promise<void> }) {
-  const [pwdVisible, setPwdVisible] = useState(false);
-  return (
-    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 space-y-2">
-      <div className="flex items-start gap-2">
-        <span className="text-lg">✅</span>
-        <div className="flex-1">
-          <strong>{toast.titulo}</strong> abierto en pestaña nueva.
-          {toast.copiada
-            ? <span className="ml-2 text-xs text-emerald-700">Clave copiada — Ctrl+V en el form.</span>
-            : <span className="ml-2 text-xs text-amber-700">⚠️ Clipboard bloqueado. Cópiala manual con el botón abajo.</span>}
-        </div>
-        <button onClick={alCerrar} className="text-stone-500 hover:text-stone-700" aria-label="Cerrar">✕</button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        <div className="flex items-center gap-2 bg-white rounded px-2 py-1 border border-emerald-100">
-          <span className="text-stone-500 shrink-0">usuario:</span>
-          <span className="font-mono break-all flex-1">{toast.usuario}</span>
-          <button onClick={() => void alCopiar(toast.usuario)} className="text-emerald-700 shrink-0" title="copiar usuario">📋</button>
-        </div>
-        <div className="flex items-center gap-2 bg-white rounded px-2 py-1 border border-emerald-100">
-          <span className="text-stone-500 shrink-0">clave:</span>
-          <span className="font-mono break-all flex-1">
-            {pwdVisible ? toast.password : "•".repeat(Math.min(12, toast.password.length))}
-          </span>
-          <button onClick={() => setPwdVisible(!pwdVisible)} className="text-emerald-700 shrink-0" title={pwdVisible ? "ocultar" : "ver"}>{pwdVisible ? "🙈" : "👁️"}</button>
-          <button onClick={() => void alCopiar(toast.password)} className="text-emerald-700 shrink-0" title="copiar clave">📋</button>
-        </div>
       </div>
     </div>
   );
@@ -268,64 +301,6 @@ function ModalContenedor({ titulo, alCerrar, children }: { titulo: string; alCer
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
-    </div>
-  );
-}
-
-function ModalVerDetalles({ acceso, sistema, alCerrar }: { acceso: AccesoGuardado; sistema?: SistemaDisponible; alCerrar: () => void }) {
-  const [credencial, setCredencial] = useState<CredencialAutofill | null>(null);
-  const [pwdVisible, setPwdVisible] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const r = await pedirJson<CredencialAutofill>(`/cocina/boveda/accesos/${acceso.id}/bookmarklet`);
-        setCredencial(r);
-      } catch (e) {
-        if (e instanceof Error) setError(e.message);
-      } finally {
-        setCargando(false);
-      }
-    })();
-  }, [acceso.id]);
-
-  async function copiar(t: string) {
-    try { await navigator.clipboard.writeText(t); } catch { /* ignore */ }
-  }
-
-  return (
-    <ModalContenedor titulo="Detalles del acceso" alCerrar={alCerrar}>
-      <dl className="space-y-2 text-sm">
-        <Fila etiqueta="Título" valor={acceso.titulo || "—"} />
-        <Fila etiqueta="Sistema" valor={sistema?.nombre || "—"} />
-        <Fila etiqueta="URL" valor={sistema?.url_acceso || "—"} />
-        <Fila etiqueta="Usuario" valor={acceso.usuario_externo} accion={() => void copiar(acceso.usuario_externo)} />
-        <div className="grid grid-cols-[110px_1fr_auto_auto] gap-2 items-center">
-          <dt className="font-medium text-stone-500">Clave</dt>
-          <dd className="break-all text-cocina-oscuro font-mono text-xs">
-            {cargando ? "Cargando…" : error ? <span className="text-red-700">{error}</span> :
-              pwdVisible ? credencial?.password : "•".repeat(Math.min(20, credencial?.password.length ?? 8))}
-          </dd>
-          <button onClick={() => setPwdVisible(!pwdVisible)} className="text-stone-500 hover:text-cocina-marron text-sm" title="Ver/ocultar">{pwdVisible ? "🙈" : "👁️"}</button>
-          <button onClick={() => credencial && void copiar(credencial.password)} className="text-stone-500 hover:text-cocina-marron text-sm" title="Copiar">📋</button>
-        </div>
-        {acceso.observaciones && <Fila etiqueta="Notas" valor={acceso.observaciones} />}
-      </dl>
-      <div className="mt-5 flex justify-end">
-        <button type="button" onClick={alCerrar} className="boton-secundario">Cerrar</button>
-      </div>
-    </ModalContenedor>
-  );
-}
-
-function Fila({ etiqueta, valor, accion }: { etiqueta: string; valor: string; accion?: () => void }) {
-  return (
-    <div className="grid grid-cols-[110px_1fr_auto] gap-2 items-center">
-      <dt className="font-medium text-stone-500">{etiqueta}</dt>
-      <dd className="break-all text-cocina-oscuro text-xs">{valor}</dd>
-      {accion && <button onClick={accion} className="text-stone-500 hover:text-cocina-marron text-sm" title="Copiar">📋</button>}
     </div>
   );
 }
