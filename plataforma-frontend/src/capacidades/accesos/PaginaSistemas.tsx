@@ -6,6 +6,16 @@ import {
   SistemaDisponible,
 } from "@/capacidades/accesos/tipos";
 
+function slugificar(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 50);
+}
+
 export default function PaginaSistemas() {
   const [sistemas, setSistemas] = useState<SistemaDisponible[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -13,13 +23,8 @@ export default function PaginaSistemas() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [mostrandoForm, setMostrandoForm] = useState(false);
 
-  const [codigo, setCodigo] = useState("");
   const [nombre, setNombre] = useState("");
   const [urlAcceso, setUrlAcceso] = useState("");
-  const [urlLogin, setUrlLogin] = useState("");
-  const [campoUsuario, setCampoUsuario] = useState("correo_electronico");
-  const [campoPassword, setCampoPassword] = useState("password");
-  const [metodoLogin, setMetodoLogin] = useState("POST");
   const [enviando, setEnviando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -37,13 +42,8 @@ export default function PaginaSistemas() {
   useEffect(() => { void cargar(); }, [cargar]);
 
   function limpiarForm() {
-    setCodigo("");
     setNombre("");
     setUrlAcceso("");
-    setUrlLogin("");
-    setCampoUsuario("correo_electronico");
-    setCampoPassword("password");
-    setMetodoLogin("POST");
   }
 
   async function alGuardar(e: FormEvent) {
@@ -52,14 +52,16 @@ export default function PaginaSistemas() {
     setMensaje(null);
     setEnviando(true);
     try {
+      const codigoAuto = slugificar(nombre) || `sistema_${Date.now()}`;
       await enviarJson("/cocina/sistemas", {
-        codigo: codigo.trim().toLowerCase().replace(/\s+/g, "_"),
+        codigo: codigoAuto,
         nombre: nombre.trim(),
         url_acceso: urlAcceso.trim(),
-        url_login: urlLogin.trim() || urlAcceso.trim(),
-        nombre_campo_usuario: campoUsuario.trim(),
-        nombre_campo_password: campoPassword.trim(),
-        metodo_login: metodoLogin,
+        // resto: defaults sensatos. Si después necesitamos algo distinto, se edita.
+        url_login: urlAcceso.trim(),
+        nombre_campo_usuario: "",
+        nombre_campo_password: "",
+        metodo_login: "POST",
       });
       setMensaje(`Sistema "${nombre}" registrado.`);
       limpiarForm();
@@ -73,7 +75,7 @@ export default function PaginaSistemas() {
   }
 
   async function eliminar(s: SistemaDisponible) {
-    if (!confirm(`¿Eliminar el sistema "${s.nombre}"? Los accesos guardados que apunten a él dejarán de funcionar.`)) return;
+    if (!confirm(`¿Eliminar "${s.nombre}"? Los accesos guardados que apunten a él dejarán de funcionar.`)) return;
     try {
       await enviarJson(`/cocina/sistemas/${s.id}`, undefined, "DELETE");
       void cargar();
@@ -104,43 +106,36 @@ export default function PaginaSistemas() {
 
       {mostrandoForm && (
         <form onSubmit={alGuardar} className="rounded-md border border-stone-200 bg-white p-4 space-y-3">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="sis-nombre" className="etiqueta-campo">Nombre</label>
-              <input id="sis-nombre" required type="text" className="campo-texto" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="CRM Codeplex" />
-            </div>
-            <div>
-              <label htmlFor="sis-codigo" className="etiqueta-campo">Código (slug)</label>
-              <input id="sis-codigo" required type="text" className="campo-texto" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="crm_codeplex" />
-            </div>
-            <div className="lg:col-span-2">
-              <label htmlFor="sis-url" className="etiqueta-campo">URL del sistema (donde se ve la página de login)</label>
-              <input id="sis-url" required type="url" className="campo-texto" value={urlAcceso} onChange={(e) => setUrlAcceso(e.target.value)} placeholder="https://codeplex.pe/crm/admin/authentication" />
-            </div>
-            <div className="lg:col-span-2">
-              <label htmlFor="sis-url-login" className="etiqueta-campo">URL del POST de login (opcional, si distinta a la anterior)</label>
-              <input id="sis-url-login" type="url" className="campo-texto" value={urlLogin} onChange={(e) => setUrlLogin(e.target.value)} placeholder="(deja vacío para usar la URL del sistema)" />
-            </div>
-            <div>
-              <label htmlFor="sis-campo-usuario" className="etiqueta-campo">Nombre del campo usuario en el form</label>
-              <input id="sis-campo-usuario" type="text" className="campo-texto" value={campoUsuario} onChange={(e) => setCampoUsuario(e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="sis-campo-password" className="etiqueta-campo">Nombre del campo clave en el form</label>
-              <input id="sis-campo-password" type="text" className="campo-texto" value={campoPassword} onChange={(e) => setCampoPassword(e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="sis-metodo" className="etiqueta-campo">Método</label>
-              <select id="sis-metodo" className="campo-texto" value={metodoLogin} onChange={(e) => setMetodoLogin(e.target.value)}>
-                <option value="POST">POST</option>
-                <option value="GET">GET</option>
-              </select>
-            </div>
+          <div>
+            <label htmlFor="sis-nombre" className="etiqueta-campo">Nombre</label>
+            <input
+              id="sis-nombre"
+              required
+              type="text"
+              className="campo-texto"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="CRM Codeplex"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label htmlFor="sis-url" className="etiqueta-campo">URL</label>
+            <input
+              id="sis-url"
+              required
+              type="url"
+              className="campo-texto"
+              value={urlAcceso}
+              onChange={(e) => setUrlAcceso(e.target.value)}
+              placeholder="https://codeplex.pe/crm/admin/authentication"
+            />
+            <p className="text-xs text-stone-400 mt-1">Pega la URL del login del sistema, tal cual.</p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" className="boton-secundario" onClick={() => setMostrandoForm(false)} disabled={enviando}>Cancelar</button>
             <button type="submit" className="boton-primario" disabled={enviando}>
-              {enviando ? "Guardando…" : "Guardar sistema"}
+              {enviando ? "Guardando…" : "Guardar"}
             </button>
           </div>
         </form>
@@ -164,10 +159,7 @@ export default function PaginaSistemas() {
             )}
             {!cargando && sistemas.map((s) => (
               <tr key={s.id} className="border-t border-stone-100 hover:bg-cocina-fondo">
-                <td className="px-3 py-2 font-medium text-cocina-oscuro">
-                  {s.nombre}
-                  <div className="text-xs text-stone-400">{s.codigo}</div>
-                </td>
+                <td className="px-3 py-2 font-medium text-cocina-oscuro">{s.nombre}</td>
                 <td className="px-3 py-2 text-cocina-marron break-all text-xs">{s.url_acceso}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   <button onClick={() => eliminar(s)} className="text-xs text-red-700 hover:underline">Eliminar</button>
