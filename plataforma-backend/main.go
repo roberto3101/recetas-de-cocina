@@ -10,12 +10,9 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"sistemas-unificados/capacidades/consumo_usuarios"
-	"sistemas-unificados/capacidades/consumo_usuarios/adaptadores"
 	"sistemas-unificados/aplicacion/entrada/http"
 	"sistemas-unificados/persistencia/cockroach"
 	"sistemas-unificados/plataforma/cripto"
-	"sistemas-unificados/plataforma/semilla"
 )
 
 func main() {
@@ -42,19 +39,10 @@ func main() {
 	}
 	defer conexionBaseDatos.Cerrar()
 
-	proveedorPool := consumo_usuarios.ConstruirProveedorPoolExterno(conexionBaseDatos, clavesCifrado)
-	resolverAdaptador := adaptadores.NuevoRegistroAdaptadores(proveedorPool)
-	defer resolverAdaptador.CerrarTodo()
-
-	if err := semilla.SembrarSistemasIniciales(contextoArranque, conexionBaseDatos, clavesCifrado); err != nil {
-		slog.Warn("no se pudo sembrar sistemas iniciales", "detalle", err.Error())
-	}
-
 	servidor := http.ConstruirServidor(http.OpcionesServidor{
 		Direccion:         obtenerDireccionEscucha(),
 		ConexionBaseDatos: conexionBaseDatos,
 		ClavesCifrado:     clavesCifrado,
-		ResolverAdaptador: resolverAdaptador,
 	})
 
 	contextoSenales, cancelarSenales := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

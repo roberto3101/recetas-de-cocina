@@ -13,24 +13,11 @@ import (
 type cuerpoRegistrarSistema struct {
 	Codigo              string `json:"codigo"`
 	Nombre              string `json:"nombre"`
-	Descripcion         string `json:"descripcion"`
 	UrlAcceso           string `json:"url_acceso"`
-	Motor               string `json:"motor"`
-	ClaveAdaptador      string `json:"clave_adaptador"`
-	RequiereLoginGlobal bool   `json:"requiere_login_global"`
-	SoportaLectura      bool   `json:"soporta_lectura"`
-	SoportaAutoregistro bool   `json:"soporta_autoregistro"`
-
-	HostLectura         string `json:"host_lectura,omitempty"`
-	PuertoLectura       int64  `json:"puerto_lectura,omitempty"`
-	BaseDatosLectura    string `json:"base_datos_lectura,omitempty"`
-	UsuarioLectura      string `json:"usuario_lectura,omitempty"`
-	PasswordLectura     string `json:"password_lectura,omitempty"`
-	SslModoLectura      string `json:"ssl_modo_lectura,omitempty"`
-
-	AlgoritmoHashDestino string `json:"algoritmo_hash_destino,omitempty"`
-	CostoHashDestino     *int64 `json:"costo_hash_destino,omitempty"`
-	SalEstrategia        string `json:"sal_estrategia,omitempty"`
+	UrlLogin            string `json:"url_login"`
+	NombreCampoUsuario  string `json:"nombre_campo_usuario"`
+	NombreCampoPassword string `json:"nombre_campo_password"`
+	MetodoLogin         string `json:"metodo_login"`
 }
 
 func ConstruirHandlerRegistrarSistema(conexion *cockroach.ConexionBaseDatos, clavesCifrado *cripto.ClavesCifrado) http.HandlerFunc {
@@ -45,28 +32,17 @@ func ConstruirHandlerRegistrarSistema(conexion *cockroach.ConexionBaseDatos, cla
 		}
 
 		resultado, err := catalogo_sistemas.RegistrarSistema(peticion.Context(), conexion, clavesCifrado, catalogo_sistemas.DatosRegistrarSistema{
-			Codigo:               cuerpo.Codigo,
-			Nombre:               cuerpo.Nombre,
-			Descripcion:          cuerpo.Descripcion,
-			UrlAcceso:            cuerpo.UrlAcceso,
-			Motor:                cuerpo.Motor,
-			ClaveAdaptador:       cuerpo.ClaveAdaptador,
-			RequiereLoginGlobal:  cuerpo.RequiereLoginGlobal,
-			SoportaLectura:       cuerpo.SoportaLectura,
-			SoportaAutoregistro:  cuerpo.SoportaAutoregistro,
-			HostLectura:          cuerpo.HostLectura,
-			PuertoLectura:        cuerpo.PuertoLectura,
-			BaseDatosLectura:     cuerpo.BaseDatosLectura,
-			UsuarioLecturaPlano:  cuerpo.UsuarioLectura,
-			PasswordLecturaPlana: cuerpo.PasswordLectura,
-			SslModoLectura:       cuerpo.SslModoLectura,
-			AlgoritmoHashDestino: cuerpo.AlgoritmoHashDestino,
-			CostoHashDestino:     cuerpo.CostoHashDestino,
-			SalEstrategia:        cuerpo.SalEstrategia,
-			CreadoPor:            sesion.UsuarioId,
-			SesionId:             &sesion.SesionId,
-			IpOrigen:             obtenerIpRemota(peticion),
-			AgenteUsuario:        peticion.UserAgent(),
+			Codigo:              cuerpo.Codigo,
+			Nombre:              cuerpo.Nombre,
+			UrlAcceso:           cuerpo.UrlAcceso,
+			UrlLogin:            cuerpo.UrlLogin,
+			NombreCampoUsuario:  cuerpo.NombreCampoUsuario,
+			NombreCampoPassword: cuerpo.NombreCampoPassword,
+			MetodoLogin:         cuerpo.MetodoLogin,
+			CreadoPor:           sesion.UsuarioId,
+			SesionId:            &sesion.SesionId,
+			IpOrigen:            obtenerIpRemota(peticion),
+			AgenteUsuario:       peticion.UserAgent(),
 		})
 		if errors.Is(err, catalogo_sistemas.ErrCodigoSistemaDuplicado) {
 			ResponderError(escritor, http.StatusConflict, codigosError.CodigoCodigoSistemaDuplicado, err.Error())

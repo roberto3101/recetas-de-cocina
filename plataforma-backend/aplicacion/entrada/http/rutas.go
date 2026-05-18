@@ -5,7 +5,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"sistemas-unificados/capacidades/consumo_usuarios/adaptadores"
 	"sistemas-unificados/persistencia/cockroach"
 	"sistemas-unificados/plataforma/cripto"
 )
@@ -13,7 +12,6 @@ import (
 type DependenciasRutas struct {
 	ConexionBaseDatos *cockroach.ConexionBaseDatos
 	ClavesCifrado     *cripto.ClavesCifrado
-	ResolverAdaptador adaptadores.Resolver
 }
 
 func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
@@ -53,25 +51,19 @@ func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 			con2FA.Post("/identidad/totp/revocar", ConstruirHandlerRevocarTotp(deps.ConexionBaseDatos))
 			con2FA.Post("/identidad/registrar-operador", ConstruirHandlerRegistrarOperador(deps.ConexionBaseDatos))
 
-			// CATALOGO_SISTEMAS
+			// CATALOGO_SISTEMAS — URLs registradas + selectores del form de login
 			con2FA.Get("/sistemas", ConstruirHandlerListarSistemas(deps.ConexionBaseDatos))
 			con2FA.Post("/sistemas", ConstruirHandlerRegistrarSistema(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Get("/sistemas/{id}", ConstruirHandlerConsultarSistema(deps.ConexionBaseDatos))
 			con2FA.Put("/sistemas/{id}", ConstruirHandlerActualizarSistema(deps.ConexionBaseDatos))
 			con2FA.Delete("/sistemas/{id}", ConstruirHandlerEliminarSistema(deps.ConexionBaseDatos))
-			con2FA.Post("/sistemas/{id}/probar-conexion", ConstruirHandlerProbarConexionSistema(deps.ConexionBaseDatos, deps.ClavesCifrado))
 
-			// CONSUMO_USUARIOS
-			con2FA.Get("/usuarios-externos", ConstruirHandlerListarUsuariosAgregados(deps.ConexionBaseDatos, deps.ResolverAdaptador))
-			con2FA.Get("/diagnostico/sistemas-externos", ConstruirHandlerDiagnosticoExternos(deps.ConexionBaseDatos, deps.ResolverAdaptador))
-			con2FA.Get("/sistemas/{id}/usuarios", ConstruirHandlerListarUsuariosDeSistema(deps.ConexionBaseDatos, deps.ResolverAdaptador))
-			con2FA.Get("/sistemas/{id}/usuarios/{usuario_id}", ConstruirHandlerConsultarUsuarioExterno(deps.ConexionBaseDatos, deps.ResolverAdaptador))
-			con2FA.Post("/sistemas/{id}/usuarios", ConstruirHandlerProvisionarUsuarioExterno(deps.ConexionBaseDatos, deps.ResolverAdaptador, deps.ClavesCifrado))
-			con2FA.Post("/sistemas/{id}/credencial-externa", ConstruirHandlerAsociarCredencialExterna(deps.ConexionBaseDatos, deps.ResolverAdaptador, deps.ClavesCifrado))
-			con2FA.Put("/sistemas/{id}/usuarios/{usuario_id}", ConstruirHandlerEditarUsuarioExterno(deps.ConexionBaseDatos, deps.ResolverAdaptador))
-			con2FA.Put("/sistemas/{id}/usuarios/{usuario_id}/password", ConstruirHandlerCambiarPasswordUsuarioExterno(deps.ConexionBaseDatos, deps.ResolverAdaptador, deps.ClavesCifrado))
-			con2FA.Get("/sistemas/{id}/usuarios/{usuario_id}/autofill", ConstruirHandlerAutofill(deps.ConexionBaseDatos, deps.ClavesCifrado))
-			con2FA.Get("/sistemas/{id}/usuarios/{usuario_id}/autofill-hash", ConstruirHandlerAutofillConHash(deps.ConexionBaseDatos, deps.ResolverAdaptador))
+			// BOVEDA — accesos guardados (titulo + sistema + usuario + clave cifrada)
+			con2FA.Get("/boveda/accesos", ConstruirHandlerListarAccesos(deps.ConexionBaseDatos))
+			con2FA.Post("/boveda/accesos", ConstruirHandlerGuardarAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
+			con2FA.Delete("/boveda/accesos/{id}", ConstruirHandlerEliminarAcceso(deps.ConexionBaseDatos))
+			con2FA.Get("/boveda/accesos/{id}/autofill", ConstruirHandlerAutofillAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
+			con2FA.Get("/boveda/accesos/{id}/bookmarklet", ConstruirHandlerAutofillBookmarklet(deps.ConexionBaseDatos, deps.ClavesCifrado))
 
 			// AUDITORIA
 			con2FA.Get("/auditoria", ConstruirHandlerConsultarAuditoria(deps.ConexionBaseDatos))

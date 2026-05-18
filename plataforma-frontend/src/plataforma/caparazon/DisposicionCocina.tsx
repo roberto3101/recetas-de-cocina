@@ -51,8 +51,9 @@ export default function DisposicionCocina() {
       <div className="mx-auto flex max-w-7xl gap-6 px-6 py-6">
         <aside className="w-56 shrink-0">
           <nav className="space-y-1 rounded-md border border-stone-200 bg-white p-3 shadow-sm">
-            <NavLink to="/panel/registro" className={claseEnlace}>Registro</NavLink>
             <NavLink to="/panel/acceso" className={claseEnlace}>Acceso</NavLink>
+            <NavLink to="/panel/registro" className={claseEnlace}>Registrar acceso</NavLink>
+            <NavLink to="/panel/sistemas" className={claseEnlace}>Sistemas</NavLink>
             <div className="my-2 border-t border-stone-200" />
             <NavLink to="/panel/cambiar-password" className={claseEnlace}>Cambiar contraseña</NavLink>
           </nav>

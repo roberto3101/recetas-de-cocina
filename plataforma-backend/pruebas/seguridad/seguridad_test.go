@@ -19,8 +19,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	httpEntrada "sistemas-unificados/aplicacion/entrada/http"
-	"sistemas-unificados/capacidades/consumo_usuarios"
-	"sistemas-unificados/capacidades/consumo_usuarios/adaptadores"
 	"sistemas-unificados/capacidades/identidad"
 	"sistemas-unificados/persistencia/cockroach"
 	"sistemas-unificados/plataforma/cripto"
@@ -70,14 +68,10 @@ func montarEntornoPruebas(t *testing.T) *entornoPruebas {
 		t.Fatalf("no se pudo crear operador de prueba: %v", err)
 	}
 
-	proveedorPool := consumo_usuarios.ConstruirProveedorPoolExterno(conexion, claves)
-	resolver := adaptadores.NuevoRegistroAdaptadores(proveedorPool)
-
 	enrutador := chi.NewRouter()
 	httpEntrada.RegistrarRutas(enrutador, httpEntrada.DependenciasRutas{
 		ConexionBaseDatos: conexion,
 		ClavesCifrado:     claves,
-		ResolverAdaptador: resolver,
 	})
 	servidor := httptest.NewServer(enrutador)
 

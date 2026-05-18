@@ -14,13 +14,11 @@ import (
 
 type cuerpoActualizarSistema struct {
 	Nombre              string `json:"nombre"`
-	Descripcion         string `json:"descripcion"`
 	UrlAcceso           string `json:"url_acceso"`
-	Motor               string `json:"motor"`
-	ClaveAdaptador      string `json:"clave_adaptador"`
-	RequiereLoginGlobal bool   `json:"requiere_login_global"`
-	SoportaLectura      bool   `json:"soporta_lectura"`
-	SoportaAutoregistro bool   `json:"soporta_autoregistro"`
+	UrlLogin            string `json:"url_login"`
+	NombreCampoUsuario  string `json:"nombre_campo_usuario"`
+	NombreCampoPassword string `json:"nombre_campo_password"`
+	MetodoLogin         string `json:"metodo_login"`
 	Estado              string `json:"estado"`
 }
 
@@ -44,13 +42,11 @@ func ConstruirHandlerActualizarSistema(conexion *cockroach.ConexionBaseDatos) ht
 		err = catalogo_sistemas.ActualizarSistema(peticion.Context(), conexion, catalogo_sistemas.DatosActualizarSistema{
 			SistemaId:           id,
 			Nombre:              cuerpo.Nombre,
-			Descripcion:         cuerpo.Descripcion,
 			UrlAcceso:           cuerpo.UrlAcceso,
-			Motor:               cuerpo.Motor,
-			ClaveAdaptador:      cuerpo.ClaveAdaptador,
-			RequiereLoginGlobal: cuerpo.RequiereLoginGlobal,
-			SoportaLectura:      cuerpo.SoportaLectura,
-			SoportaAutoregistro: cuerpo.SoportaAutoregistro,
+			UrlLogin:            cuerpo.UrlLogin,
+			NombreCampoUsuario:  cuerpo.NombreCampoUsuario,
+			NombreCampoPassword: cuerpo.NombreCampoPassword,
+			MetodoLogin:         cuerpo.MetodoLogin,
 			Estado:              cuerpo.Estado,
 			ActualizadoPor:      sesion.UsuarioId,
 			SesionId:            &sesion.SesionId,

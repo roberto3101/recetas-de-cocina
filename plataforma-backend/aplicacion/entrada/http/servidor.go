@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"sistemas-unificados/capacidades/consumo_usuarios/adaptadores"
 	"sistemas-unificados/persistencia/cockroach"
 	"sistemas-unificados/plataforma/cripto"
 )
@@ -22,7 +21,6 @@ type OpcionesServidor struct {
 	Direccion         string
 	ConexionBaseDatos *cockroach.ConexionBaseDatos
 	ClavesCifrado     *cripto.ClavesCifrado
-	ResolverAdaptador adaptadores.Resolver
 }
 
 func ConstruirServidor(opciones OpcionesServidor) *Servidor {
@@ -35,7 +33,6 @@ func ConstruirServidor(opciones OpcionesServidor) *Servidor {
 	RegistrarRutas(enrutador, DependenciasRutas{
 		ConexionBaseDatos: opciones.ConexionBaseDatos,
 		ClavesCifrado:     opciones.ClavesCifrado,
-		ResolverAdaptador: opciones.ResolverAdaptador,
 	})
 
 	servidorHttp := &http.Server{

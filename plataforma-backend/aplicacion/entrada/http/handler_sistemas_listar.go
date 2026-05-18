@@ -12,13 +12,11 @@ type itemSistemaListado struct {
 	Id                  string `json:"id"`
 	Codigo              string `json:"codigo"`
 	Nombre              string `json:"nombre"`
-	Descripcion         string `json:"descripcion"`
 	UrlAcceso           string `json:"url_acceso"`
-	Motor               string `json:"motor"`
-	ClaveAdaptador      string `json:"clave_adaptador"`
-	RequiereLoginGlobal bool   `json:"requiere_login_global"`
-	SoportaLectura      bool   `json:"soporta_lectura"`
-	SoportaAutoregistro bool   `json:"soporta_autoregistro"`
+	UrlLogin            string `json:"url_login"`
+	NombreCampoUsuario  string `json:"nombre_campo_usuario"`
+	NombreCampoPassword string `json:"nombre_campo_password"`
+	MetodoLogin         string `json:"metodo_login"`
 	Estado              string `json:"estado"`
 }
 
@@ -38,13 +36,11 @@ func ConstruirHandlerListarSistemas(conexion *cockroach.ConexionBaseDatos) http.
 				Id:                  s.Id.String(),
 				Codigo:              s.Codigo,
 				Nombre:              s.Nombre,
-				Descripcion:         s.Descripcion,
 				UrlAcceso:           s.UrlAcceso,
-				Motor:               s.Motor,
-				ClaveAdaptador:      s.ClaveAdaptador,
-				RequiereLoginGlobal: s.RequiereLoginGlobal,
-				SoportaLectura:      s.SoportaLectura,
-				SoportaAutoregistro: s.SoportaAutoregistro,
+				UrlLogin:            s.UrlLogin,
+				NombreCampoUsuario:  s.NombreCampoUsuario,
+				NombreCampoPassword: s.NombreCampoPassword,
+				MetodoLogin:         s.MetodoLogin,
 				Estado:              s.Estado,
 			})
 		}

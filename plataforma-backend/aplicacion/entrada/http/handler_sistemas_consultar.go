@@ -36,13 +36,11 @@ func ConstruirHandlerConsultarSistema(conexion *cockroach.ConexionBaseDatos) htt
 			"id":                    s.Id.String(),
 			"codigo":                s.Codigo,
 			"nombre":                s.Nombre,
-			"descripcion":           s.Descripcion,
 			"url_acceso":            s.UrlAcceso,
-			"motor":                 s.Motor,
-			"clave_adaptador":       s.ClaveAdaptador,
-			"requiere_login_global": s.RequiereLoginGlobal,
-			"soporta_lectura":       s.SoportaLectura,
-			"soporta_autoregistro":  s.SoportaAutoregistro,
+			"url_login":             s.UrlLogin,
+			"nombre_campo_usuario":  s.NombreCampoUsuario,
+			"nombre_campo_password": s.NombreCampoPassword,
+			"metodo_login":          s.MetodoLogin,
 			"estado":                s.Estado,
 		})
 	}

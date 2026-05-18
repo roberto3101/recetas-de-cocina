@@ -5,6 +5,7 @@ import PaginaSinResultados from "@/capacidades/cebo/PaginaSinResultados";
 import DisposicionCocina from "@/plataforma/caparazon/DisposicionCocina";
 import PaginaAcceso from "@/capacidades/accesos/PaginaAcceso";
 import PaginaRegistro from "@/capacidades/accesos/PaginaRegistro";
+import PaginaSistemas from "@/capacidades/accesos/PaginaSistemas";
 import PaginaCambiarPassword from "@/capacidades/identidad/PaginaCambiarPassword";
 import PaginaVerificarSegundoFactor from "@/capacidades/identidad/PaginaVerificarSegundoFactor";
 
@@ -18,6 +19,7 @@ export default function AplicacionEnrutada() {
         <Route index element={<Navigate to="acceso" replace />} />
         <Route path="registro" element={<PaginaRegistro />} />
         <Route path="acceso" element={<PaginaAcceso />} />
+        <Route path="sistemas" element={<PaginaSistemas />} />
         <Route path="cambiar-password" element={<PaginaCambiarPassword />} />
         <Route path="verificar" element={<PaginaVerificarSegundoFactor />} />
         <Route path="usuarios" element={<Navigate to="/panel/acceso" replace />} />

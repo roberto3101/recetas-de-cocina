@@ -13,13 +13,11 @@ import (
 type DatosActualizarSistema struct {
 	SistemaId           uuid.UUID
 	Nombre              string
-	Descripcion         string
 	UrlAcceso           string
-	Motor               string
-	ClaveAdaptador      string
-	RequiereLoginGlobal bool
-	SoportaLectura      bool
-	SoportaAutoregistro bool
+	UrlLogin            string
+	NombreCampoUsuario  string
+	NombreCampoPassword string
+	MetodoLogin         string
 	Estado              string
 	ActualizadoPor      uuid.UUID
 	SesionId            *uuid.UUID
@@ -39,18 +37,21 @@ func ActualizarSistema(contexto context.Context, conexion *cockroach.ConexionBas
 	if strings.TrimSpace(datos.UrlAcceso) == "" {
 		return ErrUrlAccesoRequerida
 	}
-	if !esMotorValido(datos.Motor) {
-		return ErrMotorInvalido
-	}
 
 	existente.Nombre = strings.TrimSpace(datos.Nombre)
-	existente.Descripcion = strings.TrimSpace(datos.Descripcion)
 	existente.UrlAcceso = strings.TrimSpace(datos.UrlAcceso)
-	existente.Motor = datos.Motor
-	existente.ClaveAdaptador = strings.TrimSpace(datos.ClaveAdaptador)
-	existente.RequiereLoginGlobal = datos.RequiereLoginGlobal
-	existente.SoportaLectura = datos.SoportaLectura
-	existente.SoportaAutoregistro = datos.SoportaAutoregistro
+	if strings.TrimSpace(datos.UrlLogin) != "" {
+		existente.UrlLogin = strings.TrimSpace(datos.UrlLogin)
+	}
+	if strings.TrimSpace(datos.NombreCampoUsuario) != "" {
+		existente.NombreCampoUsuario = strings.TrimSpace(datos.NombreCampoUsuario)
+	}
+	if strings.TrimSpace(datos.NombreCampoPassword) != "" {
+		existente.NombreCampoPassword = strings.TrimSpace(datos.NombreCampoPassword)
+	}
+	if datos.MetodoLogin != "" {
+		existente.MetodoLogin = datos.MetodoLogin
+	}
 	if datos.Estado != "" {
 		existente.Estado = datos.Estado
 	}
