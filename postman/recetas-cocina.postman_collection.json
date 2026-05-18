@@ -1,0 +1,500 @@
+{
+  "info": {
+    "_postman_id": "7c2e1f8a-9d4b-4c3e-a5f6-1b2c3d4e5f6a",
+    "name": "Gestor Codeplex — Accesos",
+    "description": "Colección completa de endpoints del gestor de accesos. Flujo recomendado:\n1. **Cebo — Login**\n2. **Catálogo — Listar sistemas** (autocompleta `sistema_destino_id`)\n3. **Bóveda — Crear acceso** (autocompleta `acceso_id`)\n4. Resto de operaciones.\n\nLas cookies de sesión se manejan automáticamente por Postman (cookie jar). Asegúrate de tener el environment **Gestor Codeplex — Producción** seleccionado.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 · Públicos",
+      "item": [
+        {
+          "name": "Healthcheck",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/salud",
+              "host": ["{{base_url}}"],
+              "path": ["salud"]
+            },
+            "description": "Estado del servicio y conectividad a BD. No requiere sesión."
+          }
+        },
+        {
+          "name": "Cebo — Página de inicio (blog)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            }
+          }
+        },
+        {
+          "name": "Cebo — Login (POST /buscar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Si el login funciona, devuelve 303 y setea cookie sesion_cocina",
+                  "pm.test(\"Login exitoso (303)\", function () {",
+                  "  pm.expect(pm.response.code).to.equal(303);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "ingrediente", "value": "{{operador_correo}}", "type": "text" },
+                { "key": "codigo", "value": "{{operador_password}}", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/buscar",
+              "host": ["{{base_url}}"],
+              "path": ["buscar"]
+            },
+            "description": "Login disfrazado de búsqueda de recetas. Devuelve 303 con redirect si la sesión se estableció correctamente."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 · Identidad (sesión requerida)",
+      "item": [
+        {
+          "name": "Perfil del operador",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/perfil",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "perfil"]
+            }
+          }
+        },
+        {
+          "name": "Listar sesiones activas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/sesiones",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "sesiones"]
+            }
+          }
+        },
+        {
+          "name": "Cerrar sesión",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/cerrar-sesion",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "cerrar-sesion"]
+            }
+          }
+        },
+        {
+          "name": "Cambiar contraseña (2FA requerido)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password_actual\": \"{{operador_password}}\",\n  \"password_nueva\": \"Nueva_Clave_2026!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/cambiar-password",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "cambiar-password"]
+            },
+            "description": "ATENCIÓN: cambia la contraseña del operador. Invalida todas las sesiones activas."
+          }
+        },
+        {
+          "name": "Registrar operador nuevo (2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo_electronico\": \"nuevo-operador@codeplex.pe\",\n  \"password_plana\": \"Clave_Inicial_2026!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/registrar-operador",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "registrar-operador"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 · TOTP / 2FA",
+      "item": [
+        {
+          "name": "Iniciar activación TOTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/totp/iniciar-activacion",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "totp", "iniciar-activacion"]
+            },
+            "description": "Devuelve un secreto base32 + URL otpauth:// para escanear con Google Authenticator."
+          }
+        },
+        {
+          "name": "Confirmar activación TOTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigo\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/totp/confirmar-activacion",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "totp", "confirmar-activacion"]
+            }
+          }
+        },
+        {
+          "name": "Validar TOTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigo\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/totp/validar",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "totp", "validar"]
+            }
+          }
+        },
+        {
+          "name": "Revocar TOTP (2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{base_url}}/cocina/identidad/totp/revocar",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "identidad", "totp", "revocar"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 · Catálogo de sistemas",
+      "item": [
+        {
+          "name": "Listar sistemas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Autocompleta sistema_destino_id con el primer sistema activo",
+                  "const j = pm.response.json();",
+                  "const sistemas = j?.datos?.sistemas || [];",
+                  "if (sistemas.length > 0) {",
+                  "  pm.environment.set('sistema_destino_id', sistemas[0].id);",
+                  "  console.log('sistema_destino_id =', sistemas[0].id, '(', sistemas[0].nombre, ')');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/sistemas",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "sistemas"]
+            },
+            "description": "Devuelve el catálogo de URLs registradas. Autocompleta `sistema_destino_id` en el environment."
+          }
+        },
+        {
+          "name": "Registrar sistema nuevo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j?.datos?.sistema_id) {",
+                  "  pm.environment.set('sistema_destino_id', j.datos.sistema_id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigo\": \"sistema_postman_demo\",\n  \"nombre\": \"Sistema Postman Demo\",\n  \"url_acceso\": \"https://demo.example.com/login\",\n  \"url_login\": \"https://demo.example.com/login\",\n  \"nombre_campo_usuario\": \"correo_electronico\",\n  \"nombre_campo_password\": \"password\",\n  \"metodo_login\": \"POST\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/sistemas",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "sistemas"]
+            }
+          }
+        },
+        {
+          "name": "Consultar sistema por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/sistemas/{{sistema_destino_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "sistemas", "{{sistema_destino_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar sistema",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Sistema Postman Demo (actualizado)\",\n  \"url_acceso\": \"https://demo.example.com/login\",\n  \"url_login\": \"https://demo.example.com/login\",\n  \"nombre_campo_usuario\": \"correo_electronico\",\n  \"nombre_campo_password\": \"password\",\n  \"metodo_login\": \"POST\",\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/sistemas/{{sistema_destino_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "sistemas", "{{sistema_destino_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Eliminar sistema",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/sistemas/{{sistema_destino_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "sistemas", "{{sistema_destino_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 · Bóveda (accesos guardados)",
+      "item": [
+        {
+          "name": "Listar accesos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/boveda/accesos",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "boveda", "accesos"]
+            },
+            "description": "Devuelve la lista de accesos. Usuario y observaciones descifrados al vuelo; password NO se incluye."
+          }
+        },
+        {
+          "name": "Crear acceso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j?.datos?.id) {",
+                  "  pm.environment.set('acceso_id', j.datos.id);",
+                  "  console.log('acceso_id =', j.datos.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Acceso demo Postman\",\n  \"sistema_destino_id\": \"{{sistema_destino_id}}\",\n  \"usuario_externo\": \"demo@externo.com\",\n  \"password\": \"PasswordDemo_2026!\",\n  \"observaciones\": \"Acceso de prueba creado por Postman\",\n  \"tipo\": \"WEB\",\n  \"puerto\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/boveda/accesos",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "boveda", "accesos"]
+            },
+            "description": "Guarda un acceso. Cifra usuario, password y observaciones con AES-256-GCM. Autocompleta `acceso_id`."
+          }
+        },
+        {
+          "name": "Editar acceso",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Acceso demo Postman (editado)\",\n  \"sistema_destino_id\": \"{{sistema_destino_id}}\",\n  \"usuario_externo\": \"demo@externo.com\",\n  \"observaciones\": \"Editado por Postman\",\n  \"tipo\": \"WEB\",\n  \"puerto\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cocina/boveda/accesos/{{acceso_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "boveda", "accesos", "{{acceso_id}}"]
+            },
+            "description": "Edita un acceso. Si NO incluyes `password`, la clave actual se conserva. Si la incluyes, se reemplaza."
+          }
+        },
+        {
+          "name": "Obtener credencial para bookmarklet (descifra)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/boveda/accesos/{{acceso_id}}/bookmarklet",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "boveda", "accesos", "{{acceso_id}}", "bookmarklet"]
+            },
+            "description": "Devuelve usuario + password en PLANO + metadata del sistema. Usado por el bookmarklet o por el frontend para copiar al portapapeles."
+          }
+        },
+        {
+          "name": "Autofill HTML (form auto-POST)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/boveda/accesos/{{acceso_id}}/autofill",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "boveda", "accesos", "{{acceso_id}}", "autofill"]
+            },
+            "description": "Devuelve una página HTML que hace POST automático al login del sistema externo. Falla con sistemas que usen CSRF estricto (Laravel)."
+          }
+        },
+        {
+          "name": "Desactivar acceso",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/boveda/accesos/{{acceso_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "boveda", "accesos", "{{acceso_id}}"]
+            },
+            "description": "Marca el acceso como REVOCADO. Reversible con el endpoint /reactivar."
+          }
+        },
+        {
+          "name": "Reactivar acceso",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{base_url}}/cocina/boveda/accesos/{{acceso_id}}/reactivar",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "boveda", "accesos", "{{acceso_id}}", "reactivar"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 · Auditoría",
+      "item": [
+        {
+          "name": "Listar bitácora de acciones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cocina/auditoria?pagina=1&tamano_pagina=20",
+              "host": ["{{base_url}}"],
+              "path": ["cocina", "auditoria"],
+              "query": [
+                { "key": "pagina", "value": "1" },
+                { "key": "tamano_pagina", "value": "20" }
+              ]
+            },
+            "description": "Bitácora paginada de cada acción del operador (login, crear acceso, eliminar, etc.). Solo metadata, sin valores sensibles."
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": []
+}
