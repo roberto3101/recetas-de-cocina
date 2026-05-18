@@ -32,6 +32,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // El SW nuevo toma control inmediatamente sin esperar a que cierres todas las pestañas.
+        // Esto evita que veas versiones viejas tras un deploy.
+        skipWaiting: true,
+        clientsClaim: true,
         // Las rutas del backend NUNCA se cachean (siempre red)
         navigateFallbackDenylist: [/^\/cocina/, /^\/buscar/, /^\/salud/, /^\/recuperacion/],
         runtimeCaching: [
