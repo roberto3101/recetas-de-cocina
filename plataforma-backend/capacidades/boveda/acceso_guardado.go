@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -161,16 +162,163 @@ func ConsultarAccesoPorId(contexto context.Context, ejecutor cockroach.EjecutorS
 	return a, nil
 }
 
-// ListarAccesos devuelve ACTIVO + REVOCADO. Descifra usuario_externo y observaciones.
-// NO descifra password (no se devuelve en listado).
-func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado) ([]AccesoGuardado, error) {
-	filas, err := ejecutor.Query(contexto, `
-		SELECT id, titulo, sistema_destino_id, usuario_externo,
-		       coalesce(observaciones, ''::BYTES), tipo, puerto, estado, creado_en
-		FROM acceso_guardado
-		WHERE estado != 'ELIMINADO'
-		ORDER BY creado_en DESC
-	`)
+// Opciones para listar accesos. Todos los campos son opcionales con defaults
+// sanos. La validación de valores permitidos se hace acá (whitelist) para
+// evitar SQL injection cuando construimos ORDER BY dinámico.
+type OpcionesListarAccesos struct {
+	// OrdenarPor: "creado_en" (default) o "titulo". Cualquier otra cosa se
+	// fuerza a "creado_en" para no romper SQL.
+	OrdenarPor string
+	// Direccion: "asc" o "desc" (default desc).
+	Direccion string
+	// Limite máximo de filas por respuesta. 0 = sin paginar. Cap a 200.
+	Limite int
+	// Offset para paginación. Negativo se trata como 0.
+	Offset int
+	// FiltroEstado: "ACTIVO", "REVOCADO" o vacío (incluye ambos, sin ELIMINADO).
+	FiltroEstado string
+	// SistemaDestinoId: limita a un sistema específico. Si vacío o UUID
+	// inválido, no filtra. La validación de UUID la hace el caller (handler).
+	SistemaDestinoId string
+	// Busqueda: texto libre, case-insensitive. Busca en titulo del acceso,
+	// nombre del sistema y url_acceso del sistema. NO busca en
+	// usuario_externo porque ese campo está cifrado (AES-GCM).
+	// Caracteres % y _ se escapan para que no actúen como wildcards.
+	Busqueda string
+}
+
+// escaparPatronLike escapa los wildcards de SQL LIKE (% y _) para que
+// el texto del usuario se busque literalmente, no como patrón.
+// Ejemplo: "100%" buscaría todo si no escapamos; con escape busca el
+// substring literal "100%".
+func escaparPatronLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, "%", `\%`)
+	s = strings.ReplaceAll(s, "_", `\_`)
+	return s
+}
+
+// columnaOrdenValida traduce el nombre lógico que viene del cliente al
+// nombre real de la columna. Whitelist explícita: cualquier otra cosa
+// devuelve la columna por defecto. Esto cierra la puerta a SQL injection
+// vía concatenación.
+func columnaOrdenValida(nombre string) string {
+	switch nombre {
+	case "titulo":
+		return "titulo"
+	case "creado_en":
+		return "creado_en"
+	default:
+		return "creado_en"
+	}
+}
+
+// direccionValida es ASC o DESC; cualquier otra cosa cae a DESC.
+func direccionValida(d string) string {
+	switch strings.ToUpper(d) {
+	case "ASC":
+		return "ASC"
+	case "DESC":
+		return "DESC"
+	default:
+		return "DESC"
+	}
+}
+
+// ContarAccesos devuelve el total que coincide con los filtros (sin paginar).
+// Necesario para que el frontend sepa cuántas páginas hay. Aplica los mismos
+// filtros que ListarAccesos (estado, sistema, búsqueda de texto) para que
+// el total refleje exactamente lo que verá el usuario.
+func ContarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, opts OpcionesListarAccesos) (int, error) {
+	where, args := construirWherePaginado(opts)
+	consulta := `
+		SELECT count(*) FROM acceso_guardado a
+		LEFT JOIN sistema_destino s ON s.id = a.sistema_destino_id
+		` + where
+	var total int
+	err := ejecutor.QueryRow(contexto, consulta, args...).Scan(&total)
+	return total, err
+}
+
+// construirWherePaginado arma la cláusula WHERE compartida entre ListarAccesos
+// y ContarAccesos. Devuelve el fragmento WHERE (con sus placeholders ya
+// numerados) y la lista de args en el mismo orden. Centralizado para que
+// nunca se desincronicen los filtros entre count y query principal.
+func construirWherePaginado(opts OpcionesListarAccesos) (string, []any) {
+	condiciones := []string{}
+	args := []any{}
+
+	// Estado: ACTIVO/REVOCADO explícito; si no, excluye ELIMINADO.
+	if opts.FiltroEstado == "ACTIVO" || opts.FiltroEstado == "REVOCADO" {
+		args = append(args, opts.FiltroEstado)
+		condiciones = append(condiciones, "a.estado = $"+strconv.Itoa(len(args)))
+	} else {
+		condiciones = append(condiciones, "a.estado != 'ELIMINADO'")
+	}
+
+	// Sistema específico (UUID ya validado por el handler).
+	if opts.SistemaDestinoId != "" {
+		args = append(args, opts.SistemaDestinoId)
+		condiciones = append(condiciones, "a.sistema_destino_id = $"+strconv.Itoa(len(args)))
+	}
+
+	// Búsqueda de texto: matchea contra titulo del acceso, nombre del
+	// sistema y url_acceso del sistema. Todo case-insensitive (ILIKE).
+	if q := strings.TrimSpace(opts.Busqueda); q != "" {
+		patron := "%" + escaparPatronLike(strings.ToLower(q)) + "%"
+		args = append(args, patron)
+		idx := strconv.Itoa(len(args))
+		condiciones = append(condiciones,
+			"(lower(a.titulo) ILIKE $"+idx+
+				" OR lower(s.nombre) ILIKE $"+idx+
+				" OR lower(s.url_acceso) ILIKE $"+idx+")")
+	}
+
+	return "WHERE " + strings.Join(condiciones, " AND "), args
+}
+
+// ListarAccesos devuelve los accesos paginados y ordenados según opts.
+// Descifra usuario_externo y observaciones. NO descifra password.
+//
+// Importante: filas cuyo descifrado falla (KEK distinta) se omiten — pero
+// se descuentan del total que se está devolviendo. El ContarAccesos cuenta
+// la realidad de la BD, así que el "total" puede ser mayor que la suma de
+// los items visibles si hay residuos con KEK vieja. Es el comportamiento
+// menos sorprendente para el usuario final.
+func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado, opts OpcionesListarAccesos) ([]AccesoGuardado, error) {
+	columna := columnaOrdenValida(opts.OrdenarPor)
+	direccion := direccionValida(opts.Direccion)
+	where, args := construirWherePaginado(opts)
+
+	// Tie-breaker: si dos filas tienen el mismo valor en la columna primaria
+	// (ej. dos accesos creados el mismo segundo), ordenamos por id para que
+	// la paginación sea estable y no devuelva filas duplicadas entre páginas.
+	limitClause := ""
+	if opts.Limite > 0 {
+		lim := opts.Limite
+		if lim > 200 {
+			lim = 200
+		}
+		off := opts.Offset
+		if off < 0 {
+			off = 0
+		}
+		limitClause = " LIMIT " + intToStr(lim) + " OFFSET " + intToStr(off)
+	}
+
+	// LEFT JOIN con sistema_destino para que la búsqueda de texto pueda
+	// matchear contra nombre/url del sistema. Si el sistema no existe
+	// (huérfano por eliminación) el LEFT JOIN deja s.* como NULL y los
+	// matches en s.nombre/url no aplican — pero el acceso sigue listándose.
+	consulta := `
+		SELECT a.id, a.titulo, a.sistema_destino_id, a.usuario_externo,
+		       coalesce(a.observaciones, ''::BYTES), a.tipo, a.puerto, a.estado, a.creado_en
+		FROM acceso_guardado a
+		LEFT JOIN sistema_destino s ON s.id = a.sistema_destino_id
+		` + where + `
+		ORDER BY a.` + columna + ` ` + direccion + `, a.id ASC` + limitClause
+
+	filas, err := ejecutor.Query(contexto, consulta, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,8 +335,6 @@ func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, cla
 		); err != nil {
 			return nil, err
 		}
-		// Tolerante a filas cifradas con un KEK distinto (residuos de tests/migraciones):
-		// si no se puede descifrar, logueamos y la omitimos en lugar de tumbar todo el listado.
 		usuario, err := cripto.DescifrarConAesGcm(clave, usuarioCifrado)
 		if err != nil {
 			slog.Warn("acceso_guardado.descifrado_omitido",
@@ -213,6 +359,9 @@ func ListarAccesos(contexto context.Context, ejecutor cockroach.EjecutorSql, cla
 	}
 	return resultado, filas.Err()
 }
+
+// intToStr usa strconv para evitar import circular o sprintf overhead.
+func intToStr(n int) string { return strconv.Itoa(n) }
 
 func ActualizarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, claves *cripto.ClavesCifrado, a *AccesoGuardado, actualizadoPor uuid.UUID) error {
 	usuario := strings.TrimSpace(a.UsuarioExterno)
@@ -306,6 +455,32 @@ func DesactivarAcceso(contexto context.Context, ejecutor cockroach.EjecutorSql, 
 	if tag.RowsAffected() == 0 {
 		return ErrAccesoNoEncontrado
 	}
+	return nil
+}
+
+// EliminarAccesoPermanente borra físicamente la fila de la BD. A diferencia
+// de DesactivarAcceso (estado=REVOCADO, recuperable), aquí ya no queda nada
+// en la tabla — ni el ciphertext de la password ni del usuario. Es el
+// "delete" real para casos en que el usuario quiere asegurar que el dato
+// desaparezca del sistema (ej: rotación de credenciales por compromiso).
+//
+// Devuelve ErrAccesoNoEncontrado si el id no existe. NO discrimina por
+// estado: podés borrar desde ACTIVO, REVOCADO o el caso raro de ELIMINADO
+// (sin efecto si ya no estaba).
+func EliminarAccesoPermanente(contexto context.Context, ejecutor cockroach.EjecutorSql, id uuid.UUID, eliminadoPor uuid.UUID) error {
+	tag, err := ejecutor.Exec(contexto, `
+		DELETE FROM acceso_guardado WHERE id = $1
+	`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrAccesoNoEncontrado
+	}
+	// eliminadoPor no se persiste en la fila (ya no existe), pero el caller
+	// debe escribir el audit_log con este UUID. Lo aceptamos por consistencia
+	// con DesactivarAcceso y porque el handler lo necesita.
+	_ = eliminadoPor
 	return nil
 }
 

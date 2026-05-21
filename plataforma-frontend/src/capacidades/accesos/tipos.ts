@@ -41,4 +41,23 @@ export type AccesoGuardado = {
 export type ListadoAccesos = {
   accesos: AccesoGuardado[];
   total: number;
+  limite: number;
+  offset: number;
 };
+
+// Opciones de orden expuestas al usuario. El value se manda como dos query
+// params separados al backend (orden + direccion).
+export type OpcionOrden = {
+  etiqueta: string;
+  campo: "creado_en" | "titulo";
+  direccion: "asc" | "desc";
+};
+
+export const OPCIONES_ORDEN: OpcionOrden[] = [
+  { etiqueta: "Más recientes", campo: "creado_en", direccion: "desc" },
+  { etiqueta: "Más antiguos", campo: "creado_en", direccion: "asc" },
+  { etiqueta: "Título A–Z", campo: "titulo", direccion: "asc" },
+  { etiqueta: "Título Z–A", campo: "titulo", direccion: "desc" },
+];
+
+export const TAMANO_PAGINA_DEFAULT = 40;
