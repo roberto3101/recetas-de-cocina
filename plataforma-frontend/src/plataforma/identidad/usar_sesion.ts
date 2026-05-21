@@ -12,7 +12,10 @@ type EstadoSesion = {
   perfil: Perfil | null;
   cargando: boolean;
   error: string | null;
-  recargar: () => Promise<void>;
+  // recargar refresca el contexto y devuelve el perfil fetcheado (o null si
+  // no hay sesión). El caller puede usar el retorno para decidir a dónde
+  // navegar sin tener que esperar al próximo render del Context.
+  recargar: () => Promise<Perfil | null>;
   cerrarSesion: () => Promise<void>;
 };
 
@@ -26,19 +29,23 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const recargar = useCallback(async () => {
+  const recargar = useCallback(async (): Promise<Perfil | null> => {
     setCargando(true);
     setError(null);
     try {
       const datos = await pedirJson<Perfil>("/cocina/identidad/perfil");
       setPerfil(datos);
+      return datos;
     } catch (e) {
       if (e instanceof ErrorApi && e.estadoHttp === 404) {
         setPerfil(null);
-      } else if (e instanceof Error) {
+        return null;
+      }
+      if (e instanceof Error) {
         setError(e.message);
         setPerfil(null);
       }
+      return null;
     } finally {
       setCargando(false);
     }

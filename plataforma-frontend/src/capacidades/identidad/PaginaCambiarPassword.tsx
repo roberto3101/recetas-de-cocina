@@ -2,6 +2,8 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ErrorApi, enviarJson } from "@/plataforma/red/cliente_api";
+import CampoContrasena from "@/plataforma/ui/CampoContrasena";
+import MedidorPassword, { evaluarPassword } from "@/plataforma/ui/MedidorPassword";
 
 export default function PaginaCambiarPassword() {
   const navegar = useNavigate();
@@ -60,10 +62,8 @@ export default function PaginaCambiarPassword() {
       <form onSubmit={alGuardar} className="space-y-4">
         <div>
           <label className="etiqueta-campo">Contraseña actual</label>
-          <input
-            type="password"
+          <CampoContrasena
             required
-            className="campo-texto"
             value={passwordActual}
             onChange={(e) => setPasswordActual(e.target.value)}
             autoComplete="current-password"
@@ -71,30 +71,32 @@ export default function PaginaCambiarPassword() {
         </div>
         <div>
           <label className="etiqueta-campo">Nueva contraseña</label>
-          <input
-            type="password"
+          <CampoContrasena
             required
-            className="campo-texto"
             value={passwordNueva}
             onChange={(e) => setPasswordNueva(e.target.value)}
             autoComplete="new-password"
+            validez={passwordNueva.length === 0 ? undefined : evaluarPassword(passwordNueva).todoOk ? "ok" : "error"}
           />
-          <p className="mt-1 text-xs text-stone-500">
-            Mínimo 12 caracteres, con mayúsculas, minúsculas, dígitos y al menos un especial.
-          </p>
+          <MedidorPassword valor={passwordNueva} confirmacion={confirmacion} />
         </div>
         <div>
           <label className="etiqueta-campo">Confirmar nueva contraseña</label>
-          <input
-            type="password"
+          <CampoContrasena
             required
-            className="campo-texto"
             value={confirmacion}
             onChange={(e) => setConfirmacion(e.target.value)}
             autoComplete="new-password"
+            validez={
+              confirmacion.length === 0
+                ? undefined
+                : confirmacion === passwordNueva && passwordNueva.length > 0
+                  ? "ok"
+                  : "error"
+            }
           />
         </div>
-        <button type="submit" className="boton-primario" disabled={enviando}>
+        <button type="submit" className="boton-primario" disabled={enviando || !evaluarPassword(passwordNueva).todoOk || passwordNueva !== confirmacion}>
           {enviando ? "Guardando…" : "Cambiar contraseña"}
         </button>
       </form>

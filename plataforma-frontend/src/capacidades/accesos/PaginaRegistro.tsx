@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ErrorApi, enviarJson, pedirJson } from "@/plataforma/red/cliente_api";
+import CampoContrasena from "@/plataforma/ui/CampoContrasena";
+import SelectorSistemaConBuscador from "@/plataforma/ui/SelectorSistemaConBuscador";
 import {
   ETIQUETAS_TIPO,
   ListadoSistemas,
@@ -157,27 +159,19 @@ export default function PaginaRegistro() {
 
         <div className="lg:col-span-2">
           <label htmlFor="acceso-url" className="etiqueta-campo">URL del sistema</label>
-          <select
-            id="acceso-url"
-            className={claseCampo("sistemaId")}
-            value={sistemaId}
-            onChange={(e) => {
-              const nuevoId = e.target.value;
+          <SelectorSistemaConBuscador
+            idCampo="acceso-url"
+            sistemas={sistemas}
+            valor={sistemaId}
+            alCambiar={(nuevoId, sis) => {
               setSistemaId(nuevoId);
               if (tituloAutomatico) {
-                const s = sistemas.find((x) => x.id === nuevoId);
-                setTitulo(s?.nombre ?? "");
+                setTitulo(sis?.nombre ?? "");
               }
             }}
-            onBlur={() => marcarTocado("sistemaId")}
-          >
-            <option value="">— Selecciona una URL —</option>
-            {sistemas.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre} — {s.url_acceso}
-              </option>
-            ))}
-          </select>
+            alBlur={() => marcarTocado("sistemaId")}
+            conError={Boolean(mostrarError("sistemaId"))}
+          />
           {mostrarError("sistemaId") && <p className="text-xs text-red-600 mt-1">{mostrarError("sistemaId")}</p>}
         </div>
 
@@ -198,15 +192,14 @@ export default function PaginaRegistro() {
         </div>
         <div>
           <label htmlFor="acceso-clave" className="etiqueta-campo">Clave</label>
-          <input
+          <CampoContrasena
             id="acceso-clave"
-            type="password"
-            className={claseCampo("clave")}
             value={clave}
             onChange={(e) => setClave(e.target.value)}
             onBlur={() => marcarTocado("clave")}
             autoComplete="new-password"
             maxLength={500}
+            validez={mostrarError("clave") ? "error" : undefined}
           />
           {mostrarError("clave") && <p className="text-xs text-red-600 mt-1">{mostrarError("clave")}</p>}
         </div>

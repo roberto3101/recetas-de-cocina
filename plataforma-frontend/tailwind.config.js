@@ -6,7 +6,12 @@ export default {
       colors: {
         cocina: {
           fondo: "#faf6f0",
-          marron: "#8b3a2a",
+          // Antes: #8b3a2a (marrón ladrillo). Ahora: naranja Tailwind 700,
+          // mismo nivel de darkness/saturación pero claramente naranja.
+          // Cambio global: todos los componentes que usan cocina-marron
+          // (botones, títulos, focus rings, headers) pasan a naranja
+          // automáticamente sin tocar JSX.
+          marron: "#c2410c",
           oscuro: "#3a2418",
         },
       },

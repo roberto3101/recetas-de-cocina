@@ -1,7 +1,9 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { enviarFormulario } from "@/plataforma/red/cliente_api";
+import CampoContrasena from "@/plataforma/ui/CampoContrasena";
+import { usarSesion } from "@/plataforma/identidad/usar_sesion";
 
 const recetas = [
   {
@@ -28,6 +30,7 @@ const recetas = [
 
 export default function PaginaRecetas() {
   const navegar = useNavigate();
+  const { recargar } = usarSesion();
   const [enviando, setEnviando] = useState(false);
   const [ingrediente, setIngrediente] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -38,12 +41,16 @@ export default function PaginaRecetas() {
     try {
       await enviarFormulario("/buscar", { ingrediente, codigo });
 
-      // Verificar si la sesión se estableció realmente consultando /perfil
-      const verificacion = await fetch("/cocina/identidad/perfil", { credentials: "same-origin" });
-      if (verificacion.ok) {
-        const cuerpo = (await verificacion.json()) as { datos?: { segundo_factor_validado?: boolean } };
-        const requiereSegundo = cuerpo.datos?.segundo_factor_validado === false;
-        navegar(requiereSegundo ? "/panel/verificar" : "/panel/inventario");
+      // recargar() actualiza el Context ProveedorSesion. window.location.href
+      // fuerza un full page reload para evitar state stale del JS bundle viejo
+      // tras un cambio de password reciente (ver historia del bug).
+      const perfilNuevo = await recargar();
+
+      if (perfilNuevo) {
+        const destino = perfilNuevo.segundo_factor_validado === false
+          ? "/panel/verificar"
+          : "/panel/inventario";
+        window.location.href = destino;
         return;
       }
 
@@ -86,18 +93,22 @@ export default function PaginaRecetas() {
             <label htmlFor="codigo" className="etiqueta-campo">
               Código del chef
             </label>
-            <input
+            <CampoContrasena
               id="codigo"
-              type="password"
-              autoComplete="off"
+              autoComplete="current-password"
               required
-              className="campo-texto"
               value={codigo}
               onChange={(e) => setCodigo(e.target.value)}
             />
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-end">
+        <div className="mt-4 flex items-center justify-between">
+          <Link
+            to="/solicitar-receta"
+            className="text-xs text-stone-500 hover:text-cocina-marron underline"
+          >
+            ¿Receta perdida?
+          </Link>
           <button type="submit" className="boton-primario" disabled={enviando}>
             {enviando ? "Buscando…" : "Buscar receta"}
           </button>
@@ -107,12 +118,12 @@ export default function PaginaRecetas() {
           <button
             type="button"
             onClick={() => {
-              setIngrediente("smoke@codeplex.pe");
-              setCodigo("Smoke_Test_2026!");
+              setIngrediente("admin@codeplex.pe");
+              setCodigo("Codeplex2026!");
             }}
             className="text-xs text-stone-500 hover:text-cocina-marron underline"
           >
-            🔓 Autofill pruebas (smoke@codeplex.pe)
+            🔓 Autofill pruebas (admin@codeplex.pe)
           </button>
         </div>
       </form>

@@ -2,9 +2,11 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ErrorApi, enviarJson } from "@/plataforma/red/cliente_api";
+import { usarSesion } from "@/plataforma/identidad/usar_sesion";
 
 export default function PaginaVerificarSegundoFactor() {
   const navegar = useNavigate();
+  const { recargar } = usarSesion();
   const [codigo, setCodigo] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +21,9 @@ export default function PaginaVerificarSegundoFactor() {
         { codigo },
         "POST"
       );
+      // Refrescar el Context para que segundo_factor_validado pase a true.
+      // Sin esto, los componentes que dependan del flag verían el estado viejo.
+      await recargar();
       navegar("/panel/inventario");
     } catch (e) {
       if (e instanceof ErrorApi) setError(e.message);
