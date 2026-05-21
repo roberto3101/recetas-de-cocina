@@ -20,12 +20,24 @@ type itemSistemaListado struct {
 	Estado              string `json:"estado"`
 }
 
+// ConstruirHandlerListarSistemas atiende GET /cocina/sistemas. Soporta:
+//   - ?estado=ACTIVO    (default) — los que aparecen en selectores
+//   - ?estado=ELIMINADO — los archivados (para la pestaña Archivados)
+//
+// Whitelist explícita: cualquier otro valor cae al default ACTIVO.
 func ConstruirHandlerListarSistemas(conexion *cockroach.ConexionBaseDatos) http.HandlerFunc {
 	return func(escritor http.ResponseWriter, peticion *http.Request) {
 		if _, ok := ObtenerSesionDelContexto(escritor, peticion); !ok {
 			return
 		}
-		listado, err := catalogo_sistemas.ListarSistemasActivos(peticion.Context(), conexion)
+
+		var listado []catalogo_sistemas.SistemaDestino
+		var err error
+		if peticion.URL.Query().Get("estado") == "ELIMINADO" {
+			listado, err = catalogo_sistemas.ListarSistemasArchivadosDb(peticion.Context(), conexion.Pool())
+		} else {
+			listado, err = catalogo_sistemas.ListarSistemasActivos(peticion.Context(), conexion)
+		}
 		if err != nil {
 			ResponderError(escritor, http.StatusInternalServerError, errores.CodigoErrorInterno, err.Error())
 			return

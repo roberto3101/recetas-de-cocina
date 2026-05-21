@@ -27,6 +27,13 @@ func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 	enrutador.Get("/", ConstruirManejadorBlogCeboInicio())
 	enrutador.With(limitadorCebo).Post("/buscar", ConstruirManejadorBlogCeboBuscar(deps.ConexionBaseDatos))
 
+	// Recuperación de contraseña disfrazada de "recetas perdidas".
+	// Mismo limitador que el cebo (60 req/min/ip) — más que suficiente para
+	// uso humano, corta intentos de enumeración a fuerza bruta.
+	enrutador.With(limitadorCebo).Post("/buscar/receta-perdida", ConstruirHandlerSolicitarReceta(deps.ConexionBaseDatos))
+	enrutador.With(limitadorCebo).Get("/buscar/validar-receta/{codigo}", ConstruirHandlerValidarReceta(deps.ConexionBaseDatos))
+	enrutador.With(limitadorCebo).Post("/buscar/preparar-receta", ConstruirHandlerPrepararReceta(deps.ConexionBaseDatos))
+
 	// Zona privada del gestor
 	enrutador.Route("/cocina", func(privado chi.Router) {
 		privado.Use(limitadorAutenticado)
@@ -59,8 +66,11 @@ func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 			con2FA.Get("/sistemas", ConstruirHandlerListarSistemas(deps.ConexionBaseDatos))
 			con2FA.Post("/sistemas", ConstruirHandlerRegistrarSistema(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Get("/sistemas/{id}", ConstruirHandlerConsultarSistema(deps.ConexionBaseDatos))
+			con2FA.Get("/sistemas/{id}/accesos-activos", ConstruirHandlerContarAccesosDeSistema(deps.ConexionBaseDatos))
+			con2FA.Get("/sistemas/{id}/accesos-revocados", ConstruirHandlerContarAccesosRevocadosDeSistema(deps.ConexionBaseDatos))
 			con2FA.Put("/sistemas/{id}", ConstruirHandlerActualizarSistema(deps.ConexionBaseDatos))
 			con2FA.Delete("/sistemas/{id}", ConstruirHandlerEliminarSistema(deps.ConexionBaseDatos))
+			con2FA.Post("/sistemas/{id}/reactivar", ConstruirHandlerReactivarSistema(deps.ConexionBaseDatos))
 
 			// BOVEDA — accesos guardados (titulo + sistema + usuario + clave cifrada)
 			con2FA.Get("/boveda/accesos", ConstruirHandlerListarAccesos(deps.ConexionBaseDatos, deps.ClavesCifrado))
@@ -68,8 +78,12 @@ func RegistrarRutas(enrutador chi.Router, deps DependenciasRutas) {
 			con2FA.Put("/boveda/accesos/{id}", ConstruirHandlerEditarAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Delete("/boveda/accesos/{id}", ConstruirHandlerDesactivarAcceso(deps.ConexionBaseDatos))
 			con2FA.Post("/boveda/accesos/{id}/reactivar", ConstruirHandlerReactivarAcceso(deps.ConexionBaseDatos))
+			// Borrado físico (irreversible). El frontend lo confirma con type-to-confirm.
+			con2FA.Delete("/boveda/accesos/{id}/permanente", ConstruirHandlerEliminarPermanente(deps.ConexionBaseDatos))
 			con2FA.Get("/boveda/accesos/{id}/autofill", ConstruirHandlerAutofillAcceso(deps.ConexionBaseDatos, deps.ClavesCifrado))
 			con2FA.Get("/boveda/accesos/{id}/bookmarklet", ConstruirHandlerAutofillBookmarklet(deps.ConexionBaseDatos, deps.ClavesCifrado))
+			// Exportar bóveda completa cifrada en un ZIP AES-256 (requiere passphrase).
+			con2FA.Post("/boveda/accesos/exportar", ConstruirHandlerExportarBoveda(deps.ConexionBaseDatos, deps.ClavesCifrado))
 
 			// AUDITORIA
 			con2FA.Get("/auditoria", ConstruirHandlerConsultarAuditoria(deps.ConexionBaseDatos))
