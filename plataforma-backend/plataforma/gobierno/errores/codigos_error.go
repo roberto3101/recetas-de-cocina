@@ -36,4 +36,6 @@ const (
 	CodigoErrorInterno                = "ERROR_INTERNO"
 	CodigoLimiteVelocidadExcedido     = "LIMITE_VELOCIDAD_EXCEDIDO"
 	CodigoPermisoDenegado             = "PERMISO_DENEGADO"
+
+	CodigoTokenRecuperacionInvalido   = "TOKEN_RECUPERACION_INVALIDO"
 )

@@ -8,12 +8,18 @@ import PaginaRegistro from "@/capacidades/accesos/PaginaRegistro";
 import PaginaSistemas from "@/capacidades/accesos/PaginaSistemas";
 import PaginaCambiarPassword from "@/capacidades/identidad/PaginaCambiarPassword";
 import PaginaVerificarSegundoFactor from "@/capacidades/identidad/PaginaVerificarSegundoFactor";
+import PaginaSolicitarReceta from "@/capacidades/recuperacion/PaginaSolicitarReceta";
+import PaginaPrepararReceta from "@/capacidades/recuperacion/PaginaPrepararReceta";
 
 export default function AplicacionEnrutada() {
   return (
     <Routes>
       <Route path="/" element={<PaginaRecetas />} />
       <Route path="/sin-resultados" element={<PaginaSinResultados />} />
+
+      {/* Recuperación de contraseña disfrazada de recetas */}
+      <Route path="/solicitar-receta" element={<PaginaSolicitarReceta />} />
+      <Route path="/receta/:codigo" element={<PaginaPrepararReceta />} />
 
       <Route path="/panel" element={<DisposicionCocina />}>
         <Route index element={<Navigate to="acceso" replace />} />
